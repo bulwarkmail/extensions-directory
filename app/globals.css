@@ -1,0 +1,446 @@
+@import "tailwindcss";
+
+:root {
+  /* Editorial palette — design constants, same in every theme.
+     Paper is the off-white; navy is navy. Paper also serves as the standard
+     light text color on navy. */
+  --paper: #f5f6f8;
+  --paper-deep: #eceef2;
+  --navy: #0c1322;
+  --navy-deep: #070b16;
+  --ink: #0c1322;
+  --rasp: #db2d54;
+  --rasp-soft: #f4d3da;
+  --rule-navy: rgba(245, 246, 248, 0.14);
+  --muted-navy: rgba(245, 246, 248, 0.62);
+
+  /* Theme-aware editorial tokens. */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --alt-section: var(--paper-deep);
+  --rule: rgba(12, 19, 34, 0.14);
+  --muted-paper: rgba(12, 19, 34, 0.62);
+
+  /* Semantic shadcn-ish tokens — kept so existing extension-directory pages
+     keep working without re-skinning every component. */
+  --primary: #db2d54;
+  --primary-foreground: #ffffff;
+  --secondary: #eceef2;
+  --secondary-foreground: #0c1322;
+  --muted: #eceef2;
+  --muted-foreground: rgba(12, 19, 34, 0.62);
+  --accent: #f4d3da;
+  --accent-foreground: #a11d3d;
+  --border: rgba(12, 19, 34, 0.14);
+  --input: rgba(12, 19, 34, 0.14);
+  --ring: #db2d54;
+  --card: #ffffff;
+  --card-foreground: #0c1322;
+  --popover: #ffffff;
+  --popover-foreground: #0c1322;
+  --destructive: #c81d3a;
+  --destructive-foreground: #ffffff;
+  --success: #15803d;
+  --success-foreground: #ffffff;
+  --warning: #b45309;
+  --warning-foreground: #ffffff;
+  --info: #1d4ed8;
+  --info-foreground: #ffffff;
+}
+
+.dark {
+  /* Paper / navy / ink / rasp remain absolute constants — do NOT flip them. */
+
+  --background: var(--navy-deep);
+  --foreground: var(--paper);
+  --alt-section: var(--navy);
+  --rule: rgba(245, 246, 248, 0.14);
+  --muted-paper: rgba(245, 246, 248, 0.62);
+
+  --primary: #db2d54;
+  --primary-foreground: #ffffff;
+  --secondary: #0c1322;
+  --secondary-foreground: #f5f6f8;
+  --muted: #0c1322;
+  --muted-foreground: rgba(245, 246, 248, 0.62);
+  --accent: #2a1018;
+  --accent-foreground: #f9a8ba;
+  --border: rgba(245, 246, 248, 0.14);
+  --input: rgba(245, 246, 248, 0.14);
+  --ring: #db2d54;
+  --card: #0c1322;
+  --card-foreground: #f5f6f8;
+  --popover: #0c1322;
+  --popover-foreground: #f5f6f8;
+  --destructive: #f87171;
+  --destructive-foreground: #f5f6f8;
+  --success: #4ade80;
+  --success-foreground: #f5f6f8;
+  --warning: #fbbf24;
+  --warning-foreground: #f5f6f8;
+  --info: #60a5fa;
+  --info-foreground: #f5f6f8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-ink: var(--ink);
+  --color-rasp: var(--rasp);
+  --color-rasp-soft: var(--rasp-soft);
+  --color-alt-section: var(--alt-section);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-jetbrains);
+  --font-serif: var(--font-source-serif);
+  --font-display: var(--font-exo2);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  font-feature-settings:
+    "rlig" 1,
+    "calt" 1;
+}
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+::selection {
+  background-color: #db2d5433;
+  color: var(--foreground);
+}
+
+/* Minimalist scrollbar matching Bulwark */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted-foreground);
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out both;
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px #db2d5420;
+  }
+  50% {
+    box-shadow: 0 0 40px #db2d5440;
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* ----------------------------------------------------------------------
+   Editorial design system — runheads, eyebrows, hero underline, plates
+   ---------------------------------------------------------------------- */
+
+.ed-runhead {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted-paper);
+}
+
+.ed-eyebrow {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-paper);
+}
+
+.ed-folio {
+  font-family: var(--font-source-serif), Georgia, serif;
+  font-style: italic;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  color: var(--muted-paper);
+}
+
+/* Hero underline — raspberry highlighter behind given word range */
+.ed-hero-underline {
+  background-image: linear-gradient(
+    transparent 78%,
+    var(--rasp) 78%,
+    var(--rasp) 90%,
+    transparent 90%
+  );
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  padding-right: 1px;
+}
+
+/* Editorial CTA primary (raspberry fill) */
+.ed-cta-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  background: var(--rasp);
+  color: #ffffff;
+  font-family: var(--font-exo2), system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.005em;
+  border: 0;
+  cursor: pointer;
+  transition: background 0.15s
+    var(--ease-standard, cubic-bezier(0.22, 1, 0.36, 1));
+  text-decoration: none;
+}
+.ed-cta-primary:hover {
+  background: #c12649;
+}
+
+/* Editorial CTA ghost — outline follows page foreground; on-navy uses paper. */
+.ed-cta-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 24px;
+  background: transparent;
+  color: var(--foreground);
+  font-family: var(--font-exo2), system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: 0.005em;
+  border: 1.5px solid var(--foreground);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  text-decoration: none;
+}
+.ed-cta-ghost:hover {
+  background: rgba(12, 19, 34, 0.05);
+}
+.dark .ed-cta-ghost:hover {
+  background: rgba(245, 246, 248, 0.06);
+}
+.ed-on-navy .ed-cta-ghost,
+.ed-on-navy-deep .ed-cta-ghost {
+  color: var(--paper);
+  border-color: var(--paper);
+}
+.ed-on-navy .ed-cta-ghost:hover,
+.ed-on-navy-deep .ed-cta-ghost:hover {
+  background: rgba(245, 246, 248, 0.06);
+}
+
+/* On-navy surfaces — flip text and rules */
+.ed-on-navy {
+  background: var(--navy);
+  color: var(--paper);
+}
+.ed-on-navy-deep {
+  background: var(--navy-deep);
+  color: var(--paper);
+}
+.ed-on-navy .ed-runhead,
+.ed-on-navy .ed-eyebrow,
+.ed-on-navy .ed-folio,
+.ed-on-navy-deep .ed-runhead,
+.ed-on-navy-deep .ed-eyebrow,
+.ed-on-navy-deep .ed-folio {
+  color: var(--muted-navy);
+}
+
+/* Plate — flat, no shadow, 1px hairline */
+.ed-plate {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+}
+.ed-on-navy .ed-plate,
+.ed-on-navy-deep .ed-plate {
+  border-color: var(--rule-navy);
+}
+
+/* Hairline rule helpers */
+.ed-rule {
+  height: 1px;
+  background: var(--rule);
+  width: 100%;
+}
+.ed-on-navy .ed-rule,
+.ed-on-navy-deep .ed-rule {
+  background: var(--rule-navy);
+}
+
+/* Section padding — desktop / mobile */
+.ed-section {
+  padding: 96px 56px;
+}
+@media (max-width: 1024px) {
+  .ed-section {
+    padding: 72px 32px;
+  }
+}
+@media (max-width: 640px) {
+  .ed-section {
+    padding: 56px 20px;
+  }
+}
+
+/* Display + serif text utilities */
+.ed-display {
+  font-family: var(--font-exo2), system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 0.92;
+}
+.ed-serif-italic {
+  font-family: var(--font-source-serif), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Minimal long-description prose. Extensions ship sanitized HTML via
+   longDescription; render it with editorial-aware typography. */
+.ext-prose {
+  color: var(--foreground);
+  line-height: 1.65;
+  font-family: var(--font-source-serif), Georgia, serif;
+  font-size: 17px;
+}
+.ext-prose > :first-child { margin-top: 0; }
+.ext-prose > :last-child { margin-bottom: 0; }
+.ext-prose h1,
+.ext-prose h2,
+.ext-prose h3,
+.ext-prose h4 {
+  font-family: var(--font-exo2), system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+  line-height: 1.2;
+}
+.ext-prose h2 { font-size: 1.5rem; margin: 2rem 0 0.75rem; }
+.ext-prose h3 { font-size: 1.2rem; margin: 1.5rem 0 0.5rem; }
+.ext-prose p { margin: 0 0 1rem; }
+.ext-prose a {
+  color: var(--rasp);
+  border-bottom: 1px solid var(--rasp);
+  text-decoration: none;
+}
+.ext-prose ul,
+.ext-prose ol { margin: 0 0 1rem; padding-left: 1.5rem; }
+.ext-prose li { margin: 0.25rem 0; }
+.ext-prose code {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 0.875em;
+  background: var(--alt-section);
+  padding: 0.15em 0.4em;
+  border: 1px solid var(--rule);
+}
+.ext-prose pre {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  background: var(--alt-section);
+  border: 1px solid var(--rule);
+  padding: 1rem;
+  overflow-x: auto;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  margin: 1rem 0;
+}
+.ext-prose pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.ext-prose blockquote {
+  border-left: 2px solid var(--rasp);
+  padding: 0.25rem 0 0.25rem 1.25rem;
+  margin: 1rem 0;
+  color: var(--foreground);
+  opacity: 0.85;
+  font-style: italic;
+}
+.ext-prose img {
+  max-width: 100%;
+  border: 1px solid var(--rule);
+  margin: 1rem 0;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
