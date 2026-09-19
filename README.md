@@ -26,8 +26,9 @@ Checks, as CI runs them: `npm run lint`, `npm run typecheck`, `npm run build`.
 
 ## Deploying
 
-Production runs on mail.rath.li under pm2, behind nginx. Deploys are manual: open
-**Actions → Deploy → Run workflow** on `main`.
+Production runs on mail.rath.li under pm2, behind nginx. To deploy, open
+**Actions → Deploy → Run workflow** on `main`. The same workflow also deploys every push to `main` once
+the repository variable `AUTO_DEPLOY` is set to `true`; while it is unset, pushes only run CI.
 
 The workflow builds the standalone server on the runner, starts that exact bundle and checks that it
 answers, then streams it over SSH to `/usr/local/bin/extdir-deploy` on the server

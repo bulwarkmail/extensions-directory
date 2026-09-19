@@ -1,13 +1,19 @@
 name: Deploy
 
 # Deploys to https://extensions.bulwarkmail.org (mail.rath.li) when someone
-# presses "Run workflow". The runner builds the standalone server, checks that
-# the exact bundle starts and answers, then streams it over SSH to
+# presses "Run workflow", and on every push to main once the repository
+# variable AUTO_DEPLOY is set to "true" (Settings → Secrets and variables →
+# Actions → Variables). Without it, pushes to main skip this job.
+#
+# The runner builds the standalone server, checks that the exact bundle
+# starts and answers, then streams it over SSH to
 # /usr/local/bin/extdir-deploy on the server (deploy/extdir-deploy.sh), which
 # backs up the database, migrates, switches, health-checks and rolls back on
 # failure. Nothing is compiled on the server.
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       action:
@@ -32,34 +38,40 @@ env:
 jobs:
   deploy:
     name: ${{ inputs.action == 'rollback' && 'Roll back' || 'Build and deploy' }}
-    if: github.ref == 'refs/heads/main'
+    # Manual runs always go; pushes only when auto-deploy is switched on.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' || vars.AUTO_DEPLOY == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      # A push has no inputs; it always deploys.
+      ACTION: ${{ inputs.action || 'deploy' }}
     environment:
       name: production
       url: https://extensions.bulwarkmail.org
     steps:
       - uses: actions/checkout@v7
-        if: inputs.action == 'deploy'
+        if: env.ACTION == 'deploy'
 
       - uses: actions/setup-node@v7
-        if: inputs.action == 'deploy'
+        if: env.ACTION == 'deploy'
         with:
           node-version: 24
           cache: npm
 
       - name: Install
-        if: inputs.action == 'deploy'
+        if: env.ACTION == 'deploy'
         run: npm ci
 
       - name: Lint and typecheck
-        if: inputs.action == 'deploy'
+        if: env.ACTION == 'deploy'
         run: |
           npm run lint
           npm run typecheck
 
       - name: Build
-        if: inputs.action == 'deploy'
+        if: env.ACTION == 'deploy'
         run: npm run build
         env:
           DATABASE_PATH: ${{ runner.temp }}/build.db
@@ -71,7 +83,7 @@ jobs:
           NEXT_PUBLIC_UMAMI_SCRIPT_URL: ${{ vars.NEXT_PUBLIC_UMAMI_SCRIPT_URL }}
 
       - name: Assemble the release
-        if: inputs.action == 'deploy'
+        if: env.ACTION == 'deploy'
         run: |
           rm -rf release && mkdir release
           cp -a .next/standalone/. release/
@@ -86,7 +98,7 @@ jobs:
           du -h release.tgz
 
       - name: Check that the release starts
-        if: inputs.action == 'deploy'
+        if: env.ACTION == 'deploy'
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/smoke"
@@ -103,7 +115,7 @@ jobs:
           grep -q 'bw-field' <(curl -s http://127.0.0.1:3100/)
 
       - name: Show the server log
-        if: failure() && inputs.action == 'deploy'
+        if: failure() && env.ACTION == 'deploy'
         run: cat "$RUNNER_TEMP/server.log" || true
 
       - name: Set up SSH
@@ -115,11 +127,11 @@ jobs:
           printf '%s\n' "$DEPLOY_HOST_KEY" > ~/.ssh/known_hosts
 
       - name: Deploy
-        if: inputs.action == 'deploy'
+        if: env.ACTION == 'deploy'
         run: ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA" < release.tgz
 
       - name: Roll back
-        if: inputs.action == 'rollback'
+        if: env.ACTION == 'rollback'
         run: ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" rollback
 
       - name: Check the live site
