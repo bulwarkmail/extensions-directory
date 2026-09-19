@@ -1,0 +1,132 @@
+name: Deploy
+
+# Deploys to https://extensions.bulwarkmail.org (mail.rath.li) when someone
+# presses "Run workflow". The runner builds the standalone server, checks that
+# the exact bundle starts and answers, then streams it over SSH to
+# /usr/local/bin/extdir-deploy on the server (deploy/extdir-deploy.sh), which
+# backs up the database, migrates, switches, health-checks and rolls back on
+# failure. Nothing is compiled on the server.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "What to do"
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  DEPLOY_HOST: 62.176.249.204
+  DEPLOY_USER: ubuntu
+  # ED25519 host key of mail.rath.li (SHA256:KJU3AEoj23/nBmHDF5w8o+wfRQcQTLdg3HHBrmlMdSQ).
+  DEPLOY_HOST_KEY: "62.176.249.204 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINOvbgUpI8cbxGf9nLOZlaG+0xd/bkJosDpBTyMxuurC"
+
+jobs:
+  deploy:
+    name: ${{ inputs.action == 'rollback' && 'Roll back' || 'Build and deploy' }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://extensions.bulwarkmail.org
+    steps:
+      - uses: actions/checkout@v4
+        if: inputs.action == 'deploy'
+
+      - uses: actions/setup-node@v4
+        if: inputs.action == 'deploy'
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        if: inputs.action == 'deploy'
+        run: npm ci
+
+      - name: Lint and typecheck
+        if: inputs.action == 'deploy'
+        run: |
+          npm run lint
+          npm run typecheck
+
+      - name: Build
+        if: inputs.action == 'deploy'
+        run: npm run build
+        env:
+          DATABASE_PATH: ${{ runner.temp }}/build.db
+          UPLOADS_DIR: ${{ runner.temp }}/uploads
+          NEXT_TELEMETRY_DISABLED: 1
+          # Inlined into the client bundle at build time.
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+          NEXT_PUBLIC_UMAMI_WEBSITE_ID: ${{ vars.NEXT_PUBLIC_UMAMI_WEBSITE_ID }}
+          NEXT_PUBLIC_UMAMI_SCRIPT_URL: ${{ vars.NEXT_PUBLIC_UMAMI_SCRIPT_URL }}
+
+      - name: Assemble the release
+        if: inputs.action == 'deploy'
+        run: |
+          rm -rf release && mkdir release
+          cp -a .next/standalone/. release/
+          mkdir -p release/.next && cp -a .next/static release/.next/static
+          cp -a public release/public
+          mkdir -p release/drizzle && cp -a drizzle/migrations release/drizzle/
+          mkdir -p release/deploy && cp deploy/migrate.cjs deploy/ecosystem.config.cjs release/deploy/
+          # The migrator is not traced into the standalone node_modules.
+          rm -rf release/node_modules/drizzle-orm && cp -a node_modules/drizzle-orm release/node_modules/
+          rm -f release/.env*
+          tar -czf release.tgz -C release .
+          du -h release.tgz
+
+      - name: Check that the release starts
+        if: inputs.action == 'deploy'
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/smoke"
+          mkdir -p "$work/uploads" && tar -xzf release.tgz -C "$work"
+          export DATABASE_PATH="$RUNNER_TEMP/smoke.db" UPLOADS_DIR="$work/uploads" PORT=3100 HOSTNAME=127.0.0.1 NODE_ENV=production
+          (cd "$work" && node deploy/migrate.cjs)
+          (cd "$work" && node server.js > "$RUNNER_TEMP/server.log" 2>&1 &)
+          for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:3100/api/v1/stats && break; sleep 1; done
+          for path in / /plugins /themes /search /submit /api/v1/stats /this-page-does-not-exist; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3100${path}")
+            echo "$path $code"
+            if [ "$path" = /this-page-does-not-exist ]; then [ "$code" = 404 ]; else [ "$code" = 200 ]; fi
+          done
+          grep -q 'bw-field' <(curl -s http://127.0.0.1:3100/)
+
+      - name: Show the server log
+        if: failure() && inputs.action == 'deploy'
+        run: cat "$RUNNER_TEMP/server.log" || true
+
+      - name: Set up SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_HOST_KEY" > ~/.ssh/known_hosts
+
+      - name: Deploy
+        if: inputs.action == 'deploy'
+        run: ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA" < release.tgz
+
+      - name: Roll back
+        if: inputs.action == 'rollback'
+        run: ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" rollback
+
+      - name: Check the live site
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://extensions.bulwarkmail.org/api/v1/stats)
+            [ "$code" = 200 ] && { echo "live: $code"; exit 0; }
+            sleep 3
+          done
+          echo "live site answered $code"; exit 1
