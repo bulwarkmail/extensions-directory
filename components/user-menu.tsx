@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { Github, LayoutDashboard, LogOut, Shield, User } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ICON } from "@/components/icon";
 
-interface Me {
+export interface Me {
   author?: {
     id: string;
     githubLogin: string;
@@ -20,53 +21,107 @@ interface Me {
   };
 }
 
-export function UserMenu({ compact = false }: { compact?: boolean }) {
-  const [me, setMe] = useState<Me | null>(null);
-  const [loading, setLoading] = useState(true);
+const ROLE_LABEL: Record<NonNullable<Me["admin"]>["role"], string> = {
+  reviewer: "Reviewer",
+  admin: "Admin",
+  super_admin: "Super admin",
+};
+
+/**
+ * The account control in the nav. Signed out it is a "Sign in" button;
+ * signed in it is a 36px square with the author's initial that opens a
+ * menu. The menu is rendered into <body> so it sits on the page ground with
+ * page tokens, not on the field. Keyboard: Enter, Space or ArrowDown open
+ * it on the first item, ArrowUp on the last; arrows, Home and End move;
+ * Escape and Tab close it and Escape returns focus to the button.
+ */
+export function UserMenu({ me, loading, onSignedOut }: { me: Me | null; loading: boolean; onSignedOut: () => void }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const focusOnOpen = useRef<"first" | "last">("first");
+  const menuId = useId();
 
+  const place = () => {
+    const r = buttonRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) });
+  };
+
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open]);
+
+  // Move focus into the menu once it has been placed and rendered.
+  const placed = open && pos !== null;
   useEffect(() => {
-    let alive = true;
-    fetch("/api/v1/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (alive) setMe(data);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [pathname]);
+    if (!placed) return;
+    const items = menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]');
+    if (items && items.length) (focusOnOpen.current === "last" ? items[items.length - 1] : items[0]).focus();
+  }, [placed]);
 
   useEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!menuRef.current?.contains(t) && !buttonRef.current?.contains(t)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, { passive: true });
     return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place);
     };
   }, [open]);
+
+  // Close when the route changes.
+  const [openPath, setOpenPath] = useState(pathname);
+  if (openPath !== pathname) {
+    setOpenPath(pathname);
+    setOpen(false);
+  }
+
+  const close = (refocus: boolean) => {
+    setOpen(false);
+    if (refocus) buttonRef.current?.focus();
+  };
+
+  const onButtonKey = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      focusOnOpen.current = e.key === "ArrowUp" ? "last" : "first";
+      setOpen(true);
+    }
+  };
+
+  const onMenuKey = (e: React.KeyboardEvent) => {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    const go = (n: number) => {
+      e.preventDefault();
+      items[(n + items.length) % items.length]?.focus();
+    };
+    if (e.key === "ArrowDown") go(i + 1);
+    else if (e.key === "ArrowUp") go(i - 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(items.length - 1);
+    else if (e.key === "Escape") {
+      e.preventDefault();
+      close(true);
+    } else if (e.key === "Tab") close(false);
+  };
 
   async function signOut() {
     setSigningOut(true);
     try {
       await fetch("/api/v1/auth/logout", { method: "POST" });
     } finally {
-      setMe(null);
+      onSignedOut();
       setOpen(false);
       setSigningOut(false);
       if (pathname.startsWith("/admin")) {
@@ -78,142 +133,80 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
   }
 
   if (loading) {
-    return (
-      <div
-        className={cn(
-          "rounded-full bg-muted/60 animate-pulse",
-          compact ? "h-7 w-7" : "h-8 w-8"
-        )}
-        aria-hidden
-      />
-    );
+    // Holds the place of the account control without a pulsing skeleton.
+    return <span className="bw-iconbtn bw-nav-desk" aria-hidden style={{ visibility: "hidden" }} />;
   }
 
   if (!me?.author) {
     return (
-      <Link
-        href="/api/v1/auth/github"
-        className={cn(
-          "inline-flex items-center gap-1.5 rounded-md text-[13px] font-medium transition-colors",
-          compact
-            ? "px-2.5 py-1 bg-muted/60 text-foreground hover:bg-muted"
-            : "px-3 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-        )}
-      >
-        <Github className="w-3.5 h-3.5" />
+      <a href="/api/v1/auth/github" className="bw-btn bw-btn-ghost bw-btn-sm">
+        <Github size={16} {...ICON} />
         Sign in
-      </Link>
+      </a>
     );
   }
 
   const { author, admin } = me;
   const initial = (author.displayName || author.githubLogin).charAt(0).toUpperCase();
-  const size = compact ? "h-7 w-7" : "h-8 w-8";
 
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={cn(
-          "inline-flex items-center justify-center rounded-full border border-border bg-card overflow-hidden transition-all hover:border-primary/40 hover:shadow-sm",
-          size,
-          open && "border-primary/60 shadow-sm"
-        )}
-        aria-label="Account menu"
+        className="bw-iconbtn dx-nav-account"
+        onClick={() => {
+          focusOnOpen.current = "first";
+          setOpen((v) => !v);
+        }}
+        onKeyDown={onButtonKey}
+        aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        aria-label={`Account menu for ${author.displayName}`}
       >
-        {author.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={author.avatarUrl}
-            alt=""
-            className="h-full w-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <span className="text-[11px] font-semibold text-foreground">{initial}</span>
-        )}
+        {initial}
       </button>
 
-      {open && (
-        <div
-          className="absolute right-0 top-[calc(100%+0.5rem)] w-64 rounded-md border border-border bg-popover shadow-lg overflow-hidden z-50"
-          role="menu"
-        >
-          <div className="px-3 py-3 border-b border-border/60 flex items-center gap-3">
-            <div className={cn("inline-flex items-center justify-center rounded-full border border-border bg-card overflow-hidden shrink-0", "h-9 w-9")}>
-              {author.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={author.avatarUrl}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span className="text-[13px] font-semibold text-foreground">{initial}</span>
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-semibold text-popover-foreground truncate">
+      {open && pos
+        ? createPortal(
+            <div
+              ref={menuRef}
+              id={menuId}
+              className="dx-menu"
+              role="menu"
+              aria-label="Account"
+              style={{ top: pos.top, right: pos.right }}
+              onKeyDown={onMenuKey}
+            >
+              <div className="dx-menu-who">
                 {author.displayName}
-              </p>
-              <p className="text-[11px] text-muted-foreground truncate font-mono">
-                @{author.githubLogin}
-              </p>
-            </div>
-          </div>
-
-          <div className="py-1">
-            <Link
-              href="/dashboard"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-3 py-2 text-[13px] text-popover-foreground hover:bg-muted/60 transition-colors"
-              role="menuitem"
-            >
-              <LayoutDashboard className="w-3.5 h-3.5 text-muted-foreground" />
-              Dashboard
-            </Link>
-            <Link
-              href={`/author/${author.githubLogin}`}
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-3 py-2 text-[13px] text-popover-foreground hover:bg-muted/60 transition-colors"
-              role="menuitem"
-            >
-              <User className="w-3.5 h-3.5 text-muted-foreground" />
-              Your profile
-            </Link>
-            {admin && (
-              <Link
-                href="/admin"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-2 px-3 py-2 text-[13px] text-popover-foreground hover:bg-muted/60 transition-colors"
-                role="menuitem"
-              >
-                <Shield className="w-3.5 h-3.5 text-primary" />
-                Admin panel
-                <span className="ml-auto text-[10px] font-medium uppercase tracking-wider text-primary bg-primary/10 px-1.5 py-0.5 rounded-sm">
-                  {admin.role === "super_admin" ? "Super" : admin.role}
-                </span>
+                <small>@{author.githubLogin}</small>
+              </div>
+              <Link href="/dashboard" className="dx-menu-item" role="menuitem" onClick={() => setOpen(false)}>
+                <LayoutDashboard size={16} {...ICON} />
+                Dashboard
               </Link>
-            )}
-          </div>
-
-          <div className="py-1 border-t border-border/60">
-            <button
-              type="button"
-              onClick={signOut}
-              disabled={signingOut}
-              className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-popover-foreground hover:bg-muted/60 transition-colors disabled:opacity-60"
-              role="menuitem"
-            >
-              <LogOut className="w-3.5 h-3.5 text-muted-foreground" />
-              {signingOut ? "Signing out..." : "Sign out"}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+              <Link href={`/author/${author.githubLogin}`} className="dx-menu-item" role="menuitem" onClick={() => setOpen(false)}>
+                <User size={16} {...ICON} />
+                Your public page
+              </Link>
+              {admin ? (
+                <Link href="/admin" className="dx-menu-item" role="menuitem" onClick={() => setOpen(false)}>
+                  <Shield size={16} {...ICON} />
+                  Admin
+                  <small>{ROLE_LABEL[admin.role]}</small>
+                </Link>
+              ) : null}
+              <div className="dx-menu-sep" role="separator" />
+              <button type="button" className="dx-menu-item" role="menuitem" onClick={signOut} disabled={signingOut}>
+                <LogOut size={16} {...ICON} />
+                {signingOut ? "Signing out…" : "Sign out"}
+              </button>
+            </div>,
+            document.body
+          )
+        : null}
+    </>
   );
 }

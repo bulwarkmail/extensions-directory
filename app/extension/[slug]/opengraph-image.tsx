@@ -2,30 +2,22 @@ import { ImageResponse } from "next/og";
 import { readFile } from "fs/promises";
 import path from "path";
 import { getExtensionBySlug } from "@/lib/db/queries";
-import { formatDownloads } from "@/lib/utils";
 
 export const runtime = "nodejs";
 export const contentType = "image/png";
 export const size = { width: 1200, height: 630 };
 export const alt = "Bulwark Extension";
 
-const UPLOADS_DIR =
-  process.env.UPLOADS_DIR || path.join(process.cwd(), "data", "uploads");
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(process.cwd(), "data", "uploads");
 const PROJECT_ROOT = process.cwd();
 
-const COLORS = {
-  bg: "#0a0a0a",
-  card: "#111111",
-  border: "#262626",
-  fg: "#fafafa",
-  muted: "#a3a3a3",
-  primary: "#db2d54",
-  primaryDim: "rgba(219,45,84,0.20)",
-  pluginTint: "rgba(219,45,84,0.14)",
-  pluginText: "#f7a3b6",
-  themeTint: "rgba(139,92,246,0.18)",
-  themeText: "#c4b5fd",
-};
+// The social card follows the website's (repos/website/scripts/og.mjs): the
+// raspberry field, the white mark and wordmark top-left, the title at 60px
+// in Hanken Grotesk 400, the host bottom-left, and the product picture (here
+// the author's banner) leaving the card at the right in a 1px frame.
+const FIELD = "#db2d54";
+const ON_FIELD = "#ffffff";
+const FRAME = "rgba(255,255,255,0.55)";
 
 function mimeFor(p: string): string {
   const ext = path.extname(p).toLowerCase();
@@ -44,23 +36,19 @@ async function readAsDataUrl(absPath: string): Promise<string | null> {
   }
 }
 
-async function loadIcon(iconPath: string | null): Promise<string | null> {
-  if (!iconPath) return null;
-  const safe = iconPath.replace(/^\/+/, "").replace(/\\/g, "/");
+async function loadUpload(rel: string | null): Promise<string | null> {
+  if (!rel) return null;
+  const safe = rel.replace(/^\/+/, "").replace(/\\/g, "/");
+  if (safe.split("/").includes("..")) return null;
   return readAsDataUrl(path.join(UPLOADS_DIR, safe));
 }
 
-async function loadLogo(): Promise<string | null> {
-  return readAsDataUrl(path.join(PROJECT_ROOT, "public", "extension logo.svg"));
-}
-
+// Static instances of Hanken Grotesk (SIL Open Font License) shipped in
+// public/fonts, so rendering makes no network request.
 async function loadFont(file: string): Promise<ArrayBuffer | null> {
   try {
     const buf = await readFile(path.join(PROJECT_ROOT, "public", "fonts", file));
-    return buf.buffer.slice(
-      buf.byteOffset,
-      buf.byteOffset + buf.byteLength
-    ) as ArrayBuffer;
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   } catch {
     return null;
   }
@@ -70,401 +58,136 @@ function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   const cut = s.slice(0, max);
   const lastSpace = cut.lastIndexOf(" ");
-  // Cut at the last word boundary so satori doesn't wrap a half-word
-  // onto a third line.
   return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd() + "…";
 }
 
-function initials(name: string): string {
-  const parts = name
-    .replace(/[^\p{L}\p{N}\s-]+/gu, "")
-    .split(/[\s-]+/)
-    .filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[1][0]).toUpperCase();
-}
-
-export default async function Image({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const { slug } = await params;
-  const ext = await getExtensionBySlug(slug).catch(() => null);
-
-  const [logoDataUrl, regular, bold, extraBold] = await Promise.all([
-    loadLogo(),
-    loadFont("Inter-Regular.ttf"),
-    loadFont("Inter-Bold.ttf"),
-    loadFont("Inter-ExtraBold.ttf"),
-  ]);
-
-  const fonts: ConstructorParameters<typeof ImageResponse>[1] extends infer O
-    ? O extends { fonts?: infer F }
-      ? F
-      : never
-    : never = [];
-  if (regular) fonts.push({ name: "Inter", data: regular, weight: 400 });
-  if (bold) fonts.push({ name: "Inter", data: bold, weight: 700 });
-  if (extraBold) fonts.push({ name: "Inter", data: extraBold, weight: 800 });
-
-  if (!ext || ext.status !== "approved") {
-    return new ImageResponse(<FallbackCard logoDataUrl={logoDataUrl} />, {
-      ...size,
-      fonts,
-    });
-  }
-
-  const iconDataUrl = await loadIcon(ext.iconPath);
-  const isPlugin = ext.type === "plugin";
-
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          background: COLORS.bg,
-          color: COLORS.fg,
-          fontFamily: "Inter",
-          position: "relative",
-        }}
-      >
-        {/* Brand glow */}
-        <div
-          style={{
-            position: "absolute",
-            top: -260,
-            left: -260,
-            width: 900,
-            height: 900,
-            background: `radial-gradient(circle, ${COLORS.primaryDim} 0%, transparent 60%)`,
-            display: "flex",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            bottom: -340,
-            right: -240,
-            width: 800,
-            height: 800,
-            background: `radial-gradient(circle, rgba(219,45,84,0.10) 0%, transparent 60%)`,
-            display: "flex",
-          }}
-        />
-
-        {/* Top bar */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "44px 60px 0 60px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-            {logoDataUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={logoDataUrl}
-                alt=""
-                width={56}
-                height={56}
-                style={{ display: "block" }}
-              />
-            )}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                gap: 10,
-                fontSize: 30,
-                fontWeight: 800,
-                letterSpacing: "-0.015em",
-              }}
-            >
-              <span style={{ color: COLORS.fg }}>Bulwark</span>
-              <span style={{ color: COLORS.primary }}>Extensions</span>
-            </div>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              padding: "10px 18px",
-              borderRadius: 8,
-              background: isPlugin ? COLORS.pluginTint : COLORS.themeTint,
-              color: isPlugin ? COLORS.pluginText : COLORS.themeText,
-              fontSize: 20,
-              fontWeight: 800,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-            }}
-          >
-            {isPlugin ? "Plugin" : "Theme"}
-          </div>
-        </div>
-
-        {/* Main card */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            margin: "40px 60px 50px 60px",
-            padding: 52,
-            borderRadius: 24,
-            background: COLORS.card,
-            border: `1px solid ${COLORS.border}`,
-            flex: 1,
-            justifyContent: "space-between",
-          }}
-        >
-          {/* Top: icon + name */}
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 36 }}>
-            <div
-              style={{
-                width: 168,
-                height: 168,
-                borderRadius: 28,
-                background: iconDataUrl
-                  ? COLORS.bg
-                  : isPlugin
-                    ? COLORS.pluginTint
-                    : COLORS.themeTint,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                overflow: "hidden",
-                flexShrink: 0,
-                border: `1px solid ${COLORS.border}`,
-              }}
-            >
-              {iconDataUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={iconDataUrl}
-                  alt=""
-                  width={148}
-                  height={148}
-                  style={{ borderRadius: 20, display: "block" }}
-                />
-              ) : (
-                <div
-                  style={{
-                    fontSize: 86,
-                    fontWeight: 800,
-                    letterSpacing: "-0.04em",
-                    color: isPlugin ? COLORS.pluginText : COLORS.themeText,
-                    display: "flex",
-                  }}
-                >
-                  {initials(ext.name)}
-                </div>
-              )}
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                flex: 1,
-                minWidth: 0,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 80,
-                  fontWeight: 800,
-                  lineHeight: 1.0,
-                  letterSpacing: "-0.03em",
-                  color: COLORS.fg,
-                  display: "flex",
-                }}
-              >
-                {truncate(ext.name, 28)}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 16,
-                  marginTop: 18,
-                  fontSize: 26,
-                  fontWeight: 400,
-                  color: COLORS.muted,
-                }}
-              >
-                <span>by {ext.author?.displayName ?? "Unknown"}</span>
-                {ext.latestVersion?.version && (
-                  <>
-                    <span style={{ color: COLORS.border }}>•</span>
-                    <span style={{ color: COLORS.fg, fontWeight: 700 }}>
-                      v{ext.latestVersion.version}
-                    </span>
-                  </>
-                )}
-              </div>
-              {ext.githubRepo && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    marginTop: 16,
-                    fontSize: 22,
-                    fontWeight: 400,
-                    color: COLORS.muted,
-                  }}
-                >
-                  <GitHubMark color={COLORS.muted} />
-                  <span style={{ color: COLORS.fg }}>{ext.githubRepo}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Description — truncate to ~2 lines worth of text. ~64 chars per
-              line at 30px Inter on a ~970px column; truncate at a word
-              boundary just under 2 lines so it never spills onto a 3rd. */}
-          <div
-            style={{
-              fontSize: 30,
-              lineHeight: 1.3,
-              fontWeight: 400,
-              color: COLORS.muted,
-              marginTop: 32,
-            }}
-          >
-            {truncate(ext.description, 120)}
-          </div>
-
-          {/* Footer */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginTop: 36,
-              fontSize: 24,
-              color: COLORS.muted,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                color: COLORS.primary,
-                fontWeight: 700,
-              }}
-            >
-              /{ext.slug}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-              }}
-            >
-              <DownloadIcon color={COLORS.muted} />
-              <span style={{ color: COLORS.fg, fontWeight: 700 }}>
-                {formatDownloads(ext.totalDownloads ?? 0)}
-              </span>
-              <span>downloads</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    ),
-    { ...size, fonts }
+function Mark({ size: s }: { size: number }) {
+  return (
+    <svg width={s} height={s} viewBox="0 0 1000 1000">
+      <path fill={ON_FIELD} d="M373.467 557.247L55.226 271.52V385.564C55.226 398.153 62.453 415.6 71.355 424.501L107.525 460.671C116.426 469.573 123.653 487.02 123.653 499.609V682.08C123.655 718.462 133.336 750.017 152.047 778.668L373.467 557.247z" />
+      <path fill={ON_FIELD} d="M626.533 557.247L944.774 271.52V396.969C944.774 403.263 941.16 411.987 936.709 416.437L884.411 468.736C879.96 473.186 876.347 481.91 876.347 488.204V682.08C876.345 718.462 866.664 750.017 847.953 778.668L626.533 557.247z" />
+      <path fill={ON_FIELD} d="M500 638.743C466.206 638.738 448.855 625.316 424.448 603.033L197.809 829.672C261.382 884.635 364.213 931.859 500 990C635.787 931.859 738.618 884.635 802.191 829.672L575.552 603.033C551.145 625.316 533.794 638.738 500 638.743z" />
+      <path fill={ON_FIELD} d="M483.028 563.647L63.713 187.183C59.029 182.978 55.226 174.454 55.226 168.159V122.542C55.226 116.247 60.206 109.988 66.339 108.573L215.181 74.225C221.314 72.809 226.293 76.77 226.293 83.065V176.92L352.034 147.895C358.167 146.479 363.147 140.219 363.147 133.925V51.483C363.147 45.189 368.126 38.93 374.259 37.514L488.888 11.061C495.021 9.646 504.979 9.646 511.112 11.061L625.741 37.514C631.874 38.93 636.853 45.189 636.853 51.483V133.925C636.853 140.219 641.833 146.479 647.966 147.895L773.707 176.92V83.065C773.707 76.77 778.686 72.809 784.819 74.225L933.661 108.573C939.794 109.988 944.774 116.247 944.774 122.542V168.159C944.774 174.454 940.971 182.978 936.287 187.183L516.972 563.647C512.288 567.852 504.684 567.852 500 567.852C495.316 567.852 487.712 567.852 483.028 563.647z" />
+    </svg>
   );
 }
 
-function FallbackCard({ logoDataUrl }: { logoDataUrl: string | null }) {
+function Card({
+  title,
+  sentence,
+  icon,
+  initial,
+  banner,
+}: {
+  title: string;
+  sentence: string;
+  icon?: string | null;
+  initial?: string;
+  banner?: string | null;
+}) {
+  const textWidth = banner ? 540 : 1000;
   return (
     <div
       style={{
         width: "100%",
         height: "100%",
         display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 32,
-        background: COLORS.bg,
-        color: COLORS.fg,
-        fontFamily: "Inter",
         position: "relative",
+        background: FIELD,
+        color: ON_FIELD,
+        fontFamily: "Hanken Grotesk",
       }}
     >
-      <div
-        style={{
-          position: "absolute",
-          top: -200,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: 1000,
-          height: 1000,
-          background: `radial-gradient(circle, ${COLORS.primaryDim} 0%, transparent 60%)`,
-          display: "flex",
-        }}
-      />
-      {logoDataUrl && (
+      <div style={{ position: "absolute", top: 56, left: 64, display: "flex", alignItems: "center", gap: 14, fontSize: 28, fontWeight: 600 }}>
+        <Mark size={36} />
+        <span>
+          Bulwark <span style={{ fontWeight: 400, marginLeft: 8 }}>Extensions</span>
+        </span>
+      </div>
+
+      <div style={{ position: "absolute", top: 172, left: 64, width: textWidth, display: "flex", flexDirection: "column", gap: 24 }}>
+        {icon ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={icon} alt="" width={88} height={88} />
+        ) : initial ? (
+          <div
+            style={{
+              width: 88,
+              height: 88,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: `1px solid ${FRAME}`,
+              fontSize: 40,
+              fontWeight: 500,
+            }}
+          >
+            {initial}
+          </div>
+        ) : null}
+        <div style={{ fontSize: 60, lineHeight: 1.06, letterSpacing: "-0.015em", fontWeight: 400 }}>{title}</div>
+        <div style={{ fontSize: 26, lineHeight: 1.4, fontWeight: 400 }}>{sentence}</div>
+      </div>
+
+      <div style={{ position: "absolute", bottom: 52, left: 64, fontSize: 24 }}>extensions.bulwarkmail.org</div>
+
+      {banner ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={logoDataUrl} alt="" width={140} height={140} />
-      )}
-      <div
-        style={{
-          fontSize: 76,
-          fontWeight: 800,
-          letterSpacing: "-0.025em",
-          display: "flex",
-          gap: 16,
-        }}
-      >
-        <span>Bulwark</span>
-        <span style={{ color: COLORS.primary }}>Extensions</span>
-      </div>
-      <div
-        style={{
-          fontSize: 32,
-          color: COLORS.muted,
-          display: "flex",
-          fontWeight: 400,
-        }}
-      >
-        Plugins and themes for Bulwark Webmail
-      </div>
+        <img
+          src={banner}
+          alt=""
+          width={640}
+          height={360}
+          style={{
+            position: "absolute",
+            left: 652,
+            top: 190,
+            borderTop: `1px solid ${FRAME}`,
+            borderLeft: `1px solid ${FRAME}`,
+            objectFit: "cover",
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-function GitHubMark({ color }: { color: string }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path
-        fill={color}
-        d="M12 .5C5.4.5 0 5.9 0 12.5c0 5.3 3.4 9.8 8.2 11.4.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.3 3.6 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.3-3.3-.1-.3-.6-1.6.1-3.3 0 0 1-.3 3.3 1.3 1-.3 2-.4 3-.4s2 .1 3 .4c2.3-1.6 3.3-1.3 3.3-1.3.7 1.7.2 3 .1 3.3.8.9 1.3 2 1.3 3.3 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6C20.6 22.3 24 17.8 24 12.5 24 5.9 18.6.5 12 .5Z"
-      />
-    </svg>
-  );
-}
+export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const ext = await getExtensionBySlug(slug).catch(() => null);
 
-function DownloadIcon({ color }: { color: string }) {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+  const [regular, medium, semibold] = await Promise.all([
+    loadFont("HankenGrotesk-Regular.ttf"),
+    loadFont("HankenGrotesk-Medium.ttf"),
+    loadFont("HankenGrotesk-SemiBold.ttf"),
+  ]);
+
+  const fonts: { name: string; data: ArrayBuffer; weight: 400 | 500 | 600 }[] = [];
+  if (regular) fonts.push({ name: "Hanken Grotesk", data: regular, weight: 400 });
+  if (medium) fonts.push({ name: "Hanken Grotesk", data: medium, weight: 500 });
+  if (semibold) fonts.push({ name: "Hanken Grotesk", data: semibold, weight: 600 });
+
+  if (!ext || ext.status !== "approved") {
+    return new ImageResponse(
+      <Card title="Plugins and themes for Bulwark Webmail." sentence="Free, open source and reviewed before they are published." />,
+      { ...size, fonts }
+    );
+  }
+
+  const [icon, banner] = await Promise.all([loadUpload(ext.iconPath), loadUpload(ext.bannerPath)]);
+  const by = ext.author?.displayName ? ` by ${ext.author.displayName}` : "";
+  const kind = ext.type === "theme" ? "A theme" : "A plugin";
+
+  return new ImageResponse(
+    (
+      <Card
+        title={truncate(ext.name, banner ? 26 : 40)}
+        sentence={truncate(`${kind}${by}. ${ext.description}`, banner ? 110 : 160)}
+        icon={icon}
+        initial={ext.name.trim().charAt(0).toUpperCase()}
+        banner={banner}
       />
-    </svg>
+    ),
+    { ...size, fonts }
   );
 }

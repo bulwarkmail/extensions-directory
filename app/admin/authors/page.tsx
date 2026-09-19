@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { BadgeCheck, Minus } from "lucide-react";
+import { formatDate } from "@/lib/utils";
+import { Status } from "@/components/status";
+import { ICON } from "@/components/icon";
 
 interface Author {
   id: string;
@@ -40,66 +45,81 @@ export default function AdminAuthorsPage() {
     fetchAuthors();
   }
 
-  if (loading) {
-    return <p className="text-muted-foreground">Loading authors…</p>;
-  }
-
   return (
     <div>
-      <h2 className="text-lg font-bold text-foreground">
-        Authors
-      </h2>
+      <div className="dx-work-head" style={{ marginBottom: 24 }}>
+        <div>
+          <h1 className="bw-h2">Authors</h1>
+          <p>Everyone who has signed in with GitHub. Banning an author hides their public page and their dashboard.</p>
+        </div>
+      </div>
 
-      {authors.length === 0 ? (
-        <p className="mt-4 text-muted-foreground">No authors yet.</p>
+      {loading ? (
+        <p className="bw-help" aria-live="polite">
+          Loading authors…
+        </p>
+      ) : authors.length === 0 ? (
+        <p className="bw-help">No authors yet.</p>
       ) : (
-        <div className="mt-4 space-y-3">
-          {authors.map((author) => (
-            <div
-              key={author.id}
-              className="flex items-center justify-between rounded-[0.375rem] border border-border p-3"
-            >
-              <div className="flex items-center gap-3">
-                {author.avatarUrl ? (
-                  <img
-                    src={author.avatarUrl}
-                    alt={author.displayName}
-                    className="h-8 w-8 rounded-full"
-                  />
-                ) : (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-bold">
-                    {author.displayName?.charAt(0).toUpperCase() ?? "?"}
-                  </div>
-                )}
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    {author.displayName}
-                    {author.verified && (
-                      <span className="ml-1 text-info">✓</span>
-                    )}
-                    {author.banned && (
-                      <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                        Banned
+        <div className="bw-table-wrap">
+          <table className="bw-table">
+            <thead>
+              <tr>
+                <th scope="col">Author</th>
+                <th scope="col">GitHub</th>
+                <th scope="col">Verified</th>
+                <th scope="col">Status</th>
+                <th scope="col">Joined</th>
+                <th scope="col">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {authors.map((author) => (
+                <tr key={author.id}>
+                  <td>
+                    <span style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 180 }}>
+                      <span className="dx-initial dx-initial-sm" aria-hidden="true">
+                        {author.displayName?.charAt(0).toUpperCase() ?? "?"}
+                      </span>
+                      {author.banned ? (
+                        author.displayName
+                      ) : (
+                        <Link href={`/author/${author.githubLogin}`} className="bw-link">
+                          {author.displayName}
+                        </Link>
+                      )}
+                    </span>
+                  </td>
+                  <td>@{author.githubLogin}</td>
+                  <td>
+                    {author.verified ? (
+                      <span className="dx-st">
+                        <BadgeCheck size={16} {...ICON} />
+                        Yes
+                      </span>
+                    ) : (
+                      <span className="dx-st dx-st-off">
+                        <Minus size={16} {...ICON} />
+                        No
                       </span>
                     )}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    @{author.githubLogin}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => toggleBan(author.id, author.banned)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                  author.banned
-                    ? "bg-green-600 text-white hover:bg-green-700"
-                    : "bg-red-600 text-white hover:bg-red-700"
-                }`}
-              >
-                {author.banned ? "Unban" : "Ban"}
-              </button>
-            </div>
-          ))}
+                  </td>
+                  <td>
+                    <Status value={author.banned ? "banned" : "active"} />
+                  </td>
+                  <td style={{ whiteSpace: "nowrap" }}>{formatDate(author.createdAt)}</td>
+                  <td>
+                    <button type="button" className="dx-textbtn" onClick={() => toggleBan(author.id, author.banned)}>
+                      {author.banned ? "Unban" : "Ban"}
+                      <span className="sr-only"> {author.displayName}</span>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

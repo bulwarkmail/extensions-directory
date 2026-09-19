@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { formatDownloads, timeAgo } from "@/lib/utils";
 import { EditExtensionButton } from "@/components/edit-extension-button";
+import { formatTypeLabel } from "@/components/ext-icon";
+import { Status } from "@/components/status";
 
 interface Extension {
   id: string;
   name: string;
   slug: string;
   type: string;
+  pluginType?: string | null;
   status: string;
   featured: boolean;
   totalDownloads: number;
@@ -18,6 +22,9 @@ interface Extension {
   description: string;
   author?: { displayName: string };
 }
+
+// Display only: githubRepo may be "owner/repo" or a full URL.
+const repoName = (r: string) => r.replace(/^https?:\/\/github\.com\//, "").replace(/\/+$/, "");
 
 export default function AdminExtensionsPage() {
   const [extensions, setExtensions] = useState<Extension[]>([]);
@@ -53,84 +60,73 @@ export default function AdminExtensionsPage() {
     fetchExtensions();
   }
 
-  if (loading) {
-    return <p className="text-muted-foreground">Loading extensions…</p>;
-  }
-
   return (
     <div>
-      <h2 className="text-lg font-bold text-foreground">All extensions</h2>
+      <div className="dx-work-head" style={{ marginBottom: 24 }}>
+        <div>
+          <h1 className="bw-h2">Extensions</h1>
+          <p>Every extension in the directory, published or not. Changes apply at once.</p>
+        </div>
+      </div>
 
-      {extensions.length === 0 ? (
-        <p className="mt-4 text-muted-foreground">No extensions yet.</p>
+      {loading ? (
+        <p className="bw-help" aria-live="polite">
+          Loading extensions…
+        </p>
+      ) : extensions.length === 0 ? (
+        <p className="bw-help">No extensions yet.</p>
       ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="bw-table-wrap">
+          <table className="bw-table">
             <thead>
-              <tr className="border-b border-border text-left">
-                <th className="px-3 py-2 font-medium text-foreground">Name</th>
-                <th className="px-3 py-2 font-medium text-foreground">Type</th>
-                <th className="px-3 py-2 font-medium text-foreground">Author</th>
-                <th className="px-3 py-2 font-medium text-foreground">Repo · subpath</th>
-                <th className="px-3 py-2 font-medium text-foreground">Downloads</th>
-                <th className="px-3 py-2 font-medium text-foreground">Status</th>
-                <th className="px-3 py-2 font-medium text-foreground">Featured</th>
-                <th className="px-3 py-2 font-medium text-foreground">Updated</th>
-                <th className="px-3 py-2 font-medium text-foreground">Actions</th>
+              <tr>
+                <th scope="col">Extension</th>
+                <th scope="col">Author</th>
+                <th scope="col" className="num">
+                  Downloads
+                </th>
+                <th scope="col">Status</th>
+                <th scope="col">Featured</th>
+                <th scope="col">Updated</th>
+                <th scope="col">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody>
               {extensions.map((ext) => (
                 <tr key={ext.id}>
-                  <td className="px-3 py-2 font-medium text-foreground">
-                    {ext.name}
-                  </td>
-                  <td className="px-3 py-2 capitalize text-muted-foreground">
-                    {ext.type}
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {ext.author?.displayName ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground font-mono text-xs">
-                    {ext.githubRepo}
-                    {ext.subpath ? (
-                      <span className="text-foreground/55">/{ext.subpath}</span>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {formatDownloads(ext.totalDownloads)}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`px-2 py-0.5 text-xs font-medium ${
-                        ext.status === "approved"
-                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                          : ext.status === "suspended"
-                            ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                            : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {ext.status}
+                  <td>
+                    {ext.status === "approved" ? (
+                      <Link href={`/extension/${ext.slug}`} className="bw-link">
+                        {ext.name}
+                      </Link>
+                    ) : (
+                      ext.name
+                    )}
+                    <span className="bw-help" style={{ display: "block", marginTop: 2 }}>
+                      {formatTypeLabel(ext.type, ext.pluginType)} · {repoName(ext.githubRepo)}
+                      {ext.subpath ? `/${ext.subpath}` : ""}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-center">
-                    <button
-                      onClick={() => toggleFeatured(ext.id, ext.featured)}
-                      className={`text-lg ${
-                        ext.featured ? "text-warning" : "text-muted-foreground/40"
-                      }`}
-                      title={
-                        ext.featured ? "Remove from featured" : "Mark as featured"
-                      }
-                    >
-                      ★
-                    </button>
+                  <td>{ext.author?.displayName ?? "Unknown"}</td>
+                  <td className="num">{formatDownloads(ext.totalDownloads)}</td>
+                  <td>
+                    <Status value={ext.status} />
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground text-xs">
-                    {timeAgo(ext.updatedAt)}
+                  <td>
+                    <label className="bw-check">
+                      <input
+                        type="checkbox"
+                        checked={ext.featured}
+                        onChange={() => toggleFeatured(ext.id, ext.featured)}
+                      />
+                      <span className="sr-only">Featured: {ext.name}</span>
+                    </label>
                   </td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-3">
+                  <td style={{ whiteSpace: "nowrap" }}>{timeAgo(ext.updatedAt)}</td>
+                  <td style={{ paddingRight: 0 }}>
+                    <div className="dx-rowact">
                       <EditExtensionButton
                         slug={ext.slug}
                         extensionName={ext.name}
@@ -140,20 +136,15 @@ export default function AdminExtensionsPage() {
                         asAdmin
                         onSaved={fetchExtensions}
                         buttonLabel="Edit"
+                        buttonClassName="dx-textbtn"
                       />
                       {ext.status === "approved" ? (
-                        <button
-                          onClick={() => updateStatus(ext.id, "suspended")}
-                          className="text-xs text-red-600 hover:underline"
-                        >
-                          Suspend
+                        <button type="button" className="dx-textbtn" onClick={() => updateStatus(ext.id, "suspended")}>
+                          Suspend<span className="sr-only"> {ext.name}</span>
                         </button>
                       ) : ext.status === "suspended" ? (
-                        <button
-                          onClick={() => updateStatus(ext.id, "approved")}
-                          className="text-xs text-green-600 hover:underline"
-                        >
-                          Reinstate
+                        <button type="button" className="dx-textbtn" onClick={() => updateStatus(ext.id, "approved")}>
+                          Reinstate<span className="sr-only"> {ext.name}</span>
                         </button>
                       ) : null}
                     </div>

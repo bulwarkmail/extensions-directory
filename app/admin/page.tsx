@@ -2,13 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  Download,
-  Inbox,
-  Palette,
-  Puzzle,
-  Users,
-} from "lucide-react";
+import { ArrowRight, Download, Palette, Puzzle, Users } from "lucide-react";
+import { ICON } from "@/components/icon";
 
 interface Stats {
   extensions: number;
@@ -20,7 +15,7 @@ interface Stats {
 
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
-  const [pending, setPending] = useState(0);
+  const [pending, setPending] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/v1/stats")
@@ -38,95 +33,55 @@ export default function AdminDashboardPage() {
       .catch(() => {});
   }, []);
 
+  const n = (v: number | undefined) => (v === undefined ? "…" : v.toLocaleString());
+
   return (
     <div>
-      <h2 className="text-lg font-bold text-foreground">Dashboard</h2>
-      <p className="text-[12px] text-muted-foreground mt-0.5">
-        Snapshot of the directory.
-      </p>
-
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard
-          icon={<Puzzle className="w-3.5 h-3.5" />}
-          label="Extensions"
-          value={stats?.extensions ?? "—"}
-        />
-        <StatCard
-          icon={<Puzzle className="w-3.5 h-3.5" />}
-          label="Plugins"
-          value={stats?.plugins ?? "—"}
-        />
-        <StatCard
-          icon={<Palette className="w-3.5 h-3.5" />}
-          label="Themes"
-          value={stats?.themes ?? "—"}
-        />
-        <StatCard
-          icon={<Users className="w-3.5 h-3.5" />}
-          label="Authors"
-          value={stats?.authors ?? "—"}
-        />
-        <StatCard
-          icon={<Download className="w-3.5 h-3.5" />}
-          label="Downloads"
-          value={stats?.totalDownloads ?? "—"}
-        />
+      <div className="dx-work-head" style={{ marginBottom: 32 }}>
+        <div>
+          <h1 className="bw-h2">Overview</h1>
+          <p>What the directory holds today, and what is waiting for a reviewer.</p>
+        </div>
       </div>
 
-      <div className="mt-6">
-        <Link
-          href="/admin/submissions"
-          className={`block rounded-md border p-4 transition-colors ${
-            pending > 0
-              ? "border-warning/40 bg-warning/5 hover:bg-warning/10"
-              : "border-border bg-card hover:bg-muted/30"
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <span
-              className={`inline-flex h-9 w-9 items-center justify-center rounded-md ${
-                pending > 0
-                  ? "bg-warning/15 text-warning"
-                  : "bg-muted text-muted-foreground"
-              }`}
-            >
-              <Inbox className="w-4 h-4" />
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-semibold text-foreground">
-                {pending > 0
-                  ? `${pending} submission${pending === 1 ? "" : "s"} waiting for review`
-                  : "No pending submissions"}
-              </p>
-              <p className="text-[12px] text-muted-foreground">
-                Open the submissions queue to approve or reject.
-              </p>
-            </div>
-          </div>
-        </Link>
+      <div className="bw-note" style={{ marginBottom: 48 }}>
+        <p>
+          <b>
+            {pending === null
+              ? "Counting submissions…"
+              : pending === 0
+                ? "No submissions are waiting."
+                : `${pending} ${pending === 1 ? "submission is" : "submissions are"} waiting for review.`}
+          </b>{" "}
+          <Link href="/admin/submissions" className="bw-tlink">
+            Open the queue
+            <ArrowRight size={16} {...ICON} />
+          </Link>
+        </p>
       </div>
-    </div>
-  );
-}
 
-function StatCard({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number | string;
-}) {
-  return (
-    <div className="rounded-md border border-border bg-card p-4">
-      <div className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-        {icon}
-        {label}
+      <div className="bw-facts">
+        <div>
+          <Puzzle size={24} {...ICON} />
+          <h2 className="bw-h3">{n(stats?.plugins)} plugins</h2>
+          <p>Of {n(stats?.extensions)} published extensions.</p>
+        </div>
+        <div>
+          <Palette size={24} {...ICON} />
+          <h2 className="bw-h3">{n(stats?.themes)} themes</h2>
+          <p>CSS only, no permissions.</p>
+        </div>
+        <div>
+          <Users size={24} {...ICON} />
+          <h2 className="bw-h3">{n(stats?.authors)} authors</h2>
+          <p>Signed in with GitHub.</p>
+        </div>
+        <div>
+          <Download size={24} {...ICON} />
+          <h2 className="bw-h3">{n(stats?.totalDownloads)} downloads</h2>
+          <p>Across every version.</p>
+        </div>
       </div>
-      <p className="text-2xl font-bold text-foreground tabular-nums">
-        {typeof value === "number" ? value.toLocaleString() : value}
-      </p>
     </div>
   );
 }

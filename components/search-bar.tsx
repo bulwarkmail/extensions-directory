@@ -1,130 +1,160 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useCallback } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Search } from "lucide-react";
+import { ALLOWED_TAGS } from "@/lib/utils";
+import { ICON } from "@/components/icon";
 
-const SANS = "var(--font-exo2), system-ui, sans-serif";
-const MONO = "var(--font-jetbrains), ui-monospace, monospace";
+const TAG_LABELS: Record<string, string> = {
+  "developer-tools": "Developer tools",
+};
+const tagLabel = (t: string) => TAG_LABELS[t] ?? t.charAt(0).toUpperCase() + t.slice(1);
 
-interface SearchBarProps {
-  defaultQuery?: string;
-  placeholder?: string;
-  autoFocus?: boolean;
-}
+const SORTS = [
+  { value: "newest", label: "Newest" },
+  { value: "updated", label: "Recently updated" },
+  { value: "downloads", label: "Most downloaded" },
+  { value: "name", label: "Name" },
+];
 
-export function SearchBar({
-  defaultQuery = "",
-  placeholder = "Search extensions...",
-  autoFocus,
-}: SearchBarProps) {
+/** The search form under the home page field: an input and a Search button. */
+export function SearchBar({ placeholder = "Search plugins and themes" }: { placeholder?: string }) {
   const router = useRouter();
-  const [query, setQuery] = useState(defaultQuery);
-
-  const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      const trimmed = query.trim();
-      if (trimmed) {
-        router.push(`/search?q=${encodeURIComponent(trimmed)}`);
-      }
-    },
-    [query, router]
-  );
+  const [query, setQuery] = useState("");
 
   return (
-    <form onSubmit={handleSubmit} className="relative w-full max-w-xl">
-      <div className="relative group">
-        <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/55 pointer-events-none transition-colors group-focus-within:text-[color:var(--rasp)]" />
+    <form
+      role="search"
+      className="dx-searchform"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const trimmed = query.trim();
+        if (trimmed) router.push(`/search?q=${encodeURIComponent(trimmed)}`);
+      }}
+    >
+      <div className="dx-search">
+        <Search size={16} {...ICON} />
+        <label htmlFor="home-search" className="sr-only">
+          {placeholder}
+        </label>
         <input
-          type="text"
+          id="home-search"
+          type="search"
+          className="bw-input"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={placeholder}
-          autoFocus={autoFocus}
-          className="w-full border border-[color:var(--rule)] bg-background py-3 pl-11 pr-28 text-[14px] text-foreground placeholder:text-foreground/45 transition-all focus:border-foreground/60 focus:outline-none"
-          style={{ fontFamily: SANS }}
         />
-        <button
-          type="submit"
-          className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center px-3.5 py-1.5 text-[12px] font-semibold transition-colors hover:bg-[#c12649]"
-          style={{
-            background: "var(--rasp)",
-            color: "#fff",
-            fontFamily: SANS,
-          }}
-        >
-          Search
-        </button>
       </div>
+      <button type="submit" className="bw-btn">
+        Search
+      </button>
     </form>
   );
 }
 
-export function SearchFilters({
-  type,
-  sort,
-  tag,
+export type BrowseKind = "plugins" | "themes" | "search";
+
+/**
+ * The toolbar under the field on /plugins, /themes and /search: the type as a
+ * segmented control, then one GET form with the search input and sort and
+ * tag as native selects. Changing a select does not navigate on its own (a
+ * change of context on input fails WCAG 3.2.2 for keyboard users); Enter in
+ * the search field or "Show results" applies everything and returns to
+ * page 1. The form also works without JavaScript.
+ */
+export function BrowseToolbar({
+  kind,
+  q = "",
+  sort = "newest",
+  tag = "",
+  type = "",
 }: {
-  type?: string;
+  kind: BrowseKind;
+  q?: string;
   sort?: string;
   tag?: string;
+  type?: string;
 }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const base = kind === "search" ? "/search" : `/${kind}`;
 
-  const updateFilter = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value) {
-      params.set(key, value);
-    } else {
-      params.delete(key);
-    }
-    params.set("page", "1");
-    router.push(`?${params.toString()}`);
+  const href = (path: string, changes: Record<string, string>) => {
+    const p = new URLSearchParams();
+    const merged: Record<string, string> = { q, sort, tag, type, ...changes };
+    if (path !== "/search") delete merged.type;
+    for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
+    const s = p.toString();
+    return s ? `${path}?${s}` : path;
   };
 
-  const selectClass =
-    "border border-[color:var(--rule)] bg-background px-3 py-2 text-[13px] text-foreground transition-colors hover:border-foreground/60 focus:border-foreground/80 focus:outline-none";
+  const types =
+    kind === "search"
+      ? [
+          { label: "All", to: href("/search", { type: "" }), on: !type },
+          { label: "Plugins", to: href("/search", { type: "plugin" }), on: type === "plugin" },
+          { label: "Themes", to: href("/search", { type: "theme" }), on: type === "theme" },
+        ]
+      : [
+          { label: "Plugins", to: href("/plugins", {}), on: kind === "plugins" },
+          { label: "Themes", to: href("/themes", {}), on: kind === "themes" },
+        ];
+
+  const noun = kind === "plugins" ? "plugins" : kind === "themes" ? "themes" : "plugins and themes";
 
   return (
-    <div className="flex flex-wrap items-center gap-2" style={{ fontFamily: MONO }}>
-      <select
-        value={type || ""}
-        onChange={(e) => updateFilter("type", e.target.value)}
-        className={selectClass}
-      >
-        <option value="">All types</option>
-        <option value="plugin">Plugins</option>
-        <option value="theme">Themes</option>
-      </select>
-
-      <select
-        value={sort || "newest"}
-        onChange={(e) => updateFilter("sort", e.target.value)}
-        className={selectClass}
-      >
-        <option value="newest">Newest</option>
-        <option value="updated">Recently updated</option>
-        <option value="downloads">Most downloads</option>
-        <option value="name">Name</option>
-      </select>
-
-      <select
-        value={tag || ""}
-        onChange={(e) => updateFilter("tag", e.target.value)}
-        className={selectClass}
-      >
-        <option value="">All tags</option>
-        <option value="productivity">Productivity</option>
-        <option value="security">Security</option>
-        <option value="automation">Automation</option>
-        <option value="appearance">Appearance</option>
-        <option value="integration">Integration</option>
-        <option value="communication">Communication</option>
-        <option value="developer-tools">Developer tools</option>
-        <option value="accessibility">Accessibility</option>
-      </select>
+    <div className="dx-toolbar">
+      <nav className="bw-switch" aria-label="Type">
+        {types.map((t) => (
+          <Link key={t.label} href={t.to} className="bw-switch-option" aria-current={t.on ? "page" : undefined}>
+            {t.label}
+          </Link>
+        ))}
+      </nav>
+      <form role="search" method="get" action={base} className="dx-toolbar-form">
+        {kind === "search" && type ? <input type="hidden" name="type" value={type} /> : null}
+        <div className="dx-search">
+          <Search size={16} {...ICON} />
+          <label htmlFor={`search-${kind}`} className="sr-only">
+            Search {noun}
+          </label>
+          <input
+            id={`search-${kind}`}
+            name="q"
+            type="search"
+            className="bw-input"
+            defaultValue={q}
+            placeholder={`Search ${noun}`}
+            autoFocus={kind === "search" && !q}
+          />
+        </div>
+        <label htmlFor={`sort-${kind}`} className="sr-only">
+          Sort
+        </label>
+        <select id={`sort-${kind}`} name="sort" className="bw-input" defaultValue={sort}>
+          {SORTS.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+        <label htmlFor={`tag-${kind}`} className="sr-only">
+          Tag
+        </label>
+        <select id={`tag-${kind}`} name="tag" className="bw-input" defaultValue={tag}>
+          <option value="">All tags</option>
+          {ALLOWED_TAGS.map((t) => (
+            <option key={t} value={t}>
+              {tagLabel(t)}
+            </option>
+          ))}
+          {tag && !(ALLOWED_TAGS as readonly string[]).includes(tag) ? <option value={tag}>{tagLabel(tag)}</option> : null}
+        </select>
+        <button type="submit" className="bw-btn bw-btn-ghost">
+          Show results
+        </button>
+      </form>
     </div>
   );
 }

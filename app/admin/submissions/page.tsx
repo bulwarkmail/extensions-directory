@@ -1,26 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  AlertTriangle,
-  Check,
-  ExternalLink,
-  GitBranch,
-  FolderTree,
-  Loader2,
-  ShieldCheck,
-  X,
-} from "lucide-react";
+import { ArrowUpRight, Check, CircleCheck, CircleX, TriangleAlert, X } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-
-interface ScanFinding {
-  severity: "block" | "warn" | "info";
-  rule: string;
-  message: string;
-  file?: string;
-  line?: number;
-  snippet?: string;
-}
+import { ICON } from "@/components/icon";
+import { ScanFindings, type ScanFinding } from "@/components/scan-findings";
+import { formatTypeLabel } from "@/components/ext-icon";
 
 interface AdminSubmission {
   id: string;
@@ -78,11 +63,7 @@ export default function AdminSubmissionsPage() {
     fetchSubmissions();
   }, []);
 
-  async function handleAction(
-    id: string,
-    action: "approve" | "reject",
-    reviewNotes?: string
-  ) {
+  async function handleAction(id: string, action: "approve" | "reject", reviewNotes?: string) {
     setActionInProgress(id);
     setActionError(null);
     try {
@@ -102,272 +83,195 @@ export default function AdminSubmissionsPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div>
+      <div className="dx-work-head" style={{ marginBottom: 24 }}>
         <div>
-          <h2 className="text-lg font-bold text-foreground">
-            Pending Submissions
-          </h2>
-          <p className="text-[12px] text-muted-foreground mt-0.5">
-            Review extension submissions before they go live in the directory.
-          </p>
+          <h1 className="bw-h2">Submissions</h1>
+          <p>Review each submission before it goes live in the directory.</p>
         </div>
-        <button
-          onClick={fetchSubmissions}
-          className="text-[12px] text-muted-foreground hover:text-foreground"
-        >
-          Refresh
+        <button type="button" onClick={fetchSubmissions} className="bw-btn bw-btn-ghost bw-btn-sm" disabled={loading}>
+          {loading ? "Loading…" : "Refresh the list"}
         </button>
       </div>
 
-      {actionError && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-[13px] text-destructive flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-          <span>{actionError}</span>
+      {actionError ? (
+        <div className="bw-note dx-note-bad" role="alert" style={{ marginBottom: 24 }}>
+          <span className="dx-note-lead">
+            <CircleX size={16} {...ICON} />
+            The action failed.
+          </span>{" "}
+          {actionError}
         </div>
-      )}
+      ) : null}
 
-      {loading && (
-        <div className="flex items-center gap-2 py-8 text-muted-foreground">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-[13px]">Loading submissions…</span>
-        </div>
-      )}
+      {loading && submissions.length === 0 ? (
+        <p className="bw-help" aria-live="polite">
+          Loading submissions…
+        </p>
+      ) : null}
 
-      {error && !loading && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-[13px] text-destructive">
+      {error && !loading ? (
+        <div className="bw-note dx-note-bad" role="alert">
+          <span className="dx-note-lead">
+            <CircleX size={16} {...ICON} />
+            The queue did not load.
+          </span>{" "}
           {error}
         </div>
-      )}
+      ) : null}
 
-      {!loading && !error && submissions.length === 0 && (
-        <div className="rounded-md border border-dashed border-border bg-muted/30 py-12 text-center">
-          <p className="text-[14px] font-medium text-foreground">
-            No pending submissions
-          </p>
-          <p className="mt-1 text-[12px] text-muted-foreground">
-            New submissions will appear here for review.
-          </p>
-        </div>
-      )}
+      {!loading && !error && submissions.length === 0 ? (
+        <p className="bw-help">No submissions are waiting. New ones appear here for review.</p>
+      ) : null}
 
-      <div className="space-y-4">
-        {submissions.map((sub) => (
-          <SubmissionCard
-            key={sub.id}
-            submission={sub}
-            actionInProgress={actionInProgress === sub.id}
-            onAction={handleAction}
-          />
-        ))}
-      </div>
+      {submissions.length > 0 ? (
+        <ul className="dx-rows">
+          {submissions.map((sub) => (
+            <SubmissionRow
+              key={sub.id}
+              submission={sub}
+              actionInProgress={actionInProgress === sub.id}
+              onAction={handleAction}
+            />
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
 
-function SubmissionCard({
-  submission,
+function SubmissionRow({
+  submission: sub,
   actionInProgress,
   onAction,
 }: {
   submission: AdminSubmission;
   actionInProgress: boolean;
-  onAction: (
-    id: string,
-    action: "approve" | "reject",
-    reviewNotes?: string
-  ) => void;
+  onAction: (id: string, action: "approve" | "reject", reviewNotes?: string) => void;
 }) {
-  const sub = submission;
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
   const blockers = sub.scan?.blockers ?? [];
   const warnings = sub.scan?.warnings ?? [];
+  const reasonId = `reject-${sub.id}`;
 
   return (
-    <div className="rounded-md border border-border bg-card p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-semibold text-foreground text-[15px] truncate">
-              {sub.extensionName}
-            </h3>
-            {sub.version && (
-              <span className="text-[12px] text-muted-foreground font-mono">
-                v{sub.version}
-              </span>
-            )}
-            <span
-              className={`text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-sm ${
-                sub.type === "new_extension"
-                  ? "bg-primary/10 text-primary"
-                  : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
-              }`}
-            >
-              {sub.type === "new_extension" ? "new" : "update"}
+    <li style={{ gridTemplateColumns: "minmax(0, 1fr) auto" }}>
+      <div style={{ minWidth: 0 }}>
+        <h2 className="dx-rows-name">
+          {sub.extensionName}
+          {sub.version ? ` ${sub.version}` : ""}
+        </h2>
+        <div className="dx-rows-meta">
+          <span>{sub.type === "new_extension" ? "New extension" : "Update"}</span>
+          {sub.declaredType ? (
+            <span>{formatTypeLabel(sub.declaredType === "theme" ? "theme" : "plugin", sub.declaredType)}</span>
+          ) : null}
+          {sub.author ? (
+            <span>
+              by {sub.author.displayName} (@{sub.author.githubLogin})
             </span>
-            {sub.declaredType && (
-              <span className="text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-muted text-muted-foreground">
-                {sub.declaredType}
-              </span>
-            )}
-          </div>
-
-          {sub.author && (
-            <p className="mt-1 text-[12px] text-muted-foreground">
-              by{" "}
-              <span className="text-foreground font-medium">
-                {sub.author.displayName}
-              </span>{" "}
-              <span className="font-mono">@{sub.author.githubLogin}</span>
-            </p>
-          )}
-
-          <div className="mt-3 flex items-center gap-3 flex-wrap text-[12px]">
-            <a
-              href={sub.repoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
-            >
-              {sub.githubRepo}
-              <ExternalLink className="w-3 h-3" />
-            </a>
-            <span className="inline-flex items-center gap-1 text-muted-foreground">
-              <GitBranch className="w-3 h-3" />
-              <span className="font-mono">{sub.ref}</span>
+          ) : null}
+          <span>Submitted {formatDate(sub.submittedAt as string)}</span>
+        </div>
+        <div className="dx-rows-meta">
+          <a href={sub.repoUrl} target="_blank" rel="noopener noreferrer" className="bw-link" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            {sub.githubRepo}
+            <ArrowUpRight size={16} {...ICON} />
+          </a>
+          <span>
+            Ref <code className="bw-icode">{sub.ref}</code>
+          </span>
+          {sub.subpath ? (
+            <span>
+              Folder <code className="bw-icode">{sub.subpath}</code>
             </span>
-            {sub.subpath && (
-              <span className="inline-flex items-center gap-1 text-muted-foreground">
-                <FolderTree className="w-3 h-3" />
-                <span className="font-mono">{sub.subpath}/</span>
-              </span>
-            )}
-          </div>
-
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Submitted {formatDate(sub.submittedAt as string)}
-          </p>
-
-          {sub.scan && (
-            <div className="mt-4 rounded-md border border-border bg-muted/30 px-3 py-2">
-              <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>
-                  Scanned{" "}
-                  <strong className="text-foreground">
-                    {sub.scan.fileCount}
-                  </strong>{" "}
-                  files · {sub.scan.jsFiles} JS · {sub.scan.cssFiles} CSS
-                </span>
-                {blockers.length > 0 && (
-                  <span className="ml-auto inline-flex items-center gap-1 text-destructive font-medium">
-                    <X className="w-3 h-3" />
-                    {blockers.length} blocking
-                  </span>
-                )}
-                {warnings.length > 0 && blockers.length === 0 && (
-                  <span className="ml-auto inline-flex items-center gap-1 text-warning font-medium">
-                    <AlertTriangle className="w-3 h-3" />
-                    {warnings.length} warning{warnings.length === 1 ? "" : "s"}
-                  </span>
-                )}
-                {blockers.length === 0 && warnings.length === 0 && (
-                  <span className="ml-auto inline-flex items-center gap-1 text-success font-medium">
-                    <Check className="w-3 h-3" />
-                    clean
-                  </span>
-                )}
-              </div>
-              {(blockers.length > 0 || warnings.length > 0) && (
-                <FindingsList
-                  blockers={blockers}
-                  warnings={warnings}
-                />
-              )}
-            </div>
-          )}
+          ) : null}
         </div>
 
-        <div className="flex flex-col gap-2 shrink-0">
-          <button
-            onClick={() => onAction(sub.id, "approve")}
-            disabled={actionInProgress}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-success text-success-foreground text-[13px] font-medium hover:bg-success/90 disabled:opacity-50 transition-colors"
-          >
-            {actionInProgress ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Check className="w-3.5 h-3.5" />
-            )}
-            Approve
-          </button>
-          <button
-            onClick={() => {
-              const reason = prompt("Rejection reason:");
-              if (reason) onAction(sub.id, "reject", reason);
+        {sub.scan ? (
+          <div style={{ marginTop: 14 }}>
+            <p className="dx-rows-meta" style={{ marginTop: 0 }}>
+              {blockers.length > 0 ? (
+                <span className="dx-st dx-st-bad">
+                  <CircleX size={16} {...ICON} />
+                  {blockers.length} blocking
+                </span>
+              ) : warnings.length > 0 ? (
+                <span className="dx-st dx-st-wait">
+                  <TriangleAlert size={16} {...ICON} />
+                  {warnings.length} {warnings.length === 1 ? "warning" : "warnings"}
+                </span>
+              ) : (
+                <span className="dx-st dx-st-ok">
+                  <CircleCheck size={16} {...ICON} />
+                  Clean scan
+                </span>
+              )}
+              <span>
+                {sub.scan.fileCount} files: {sub.scan.jsFiles} JavaScript, {sub.scan.cssFiles} CSS
+              </span>
+            </p>
+            {blockers.length + warnings.length > 0 ? (
+              <details style={{ marginTop: 8 }}>
+                <summary className="dx-textbtn" style={{ display: "inline", cursor: "pointer" }}>
+                  {blockers.length + warnings.length === 1 ? "Show the finding" : `Show the ${blockers.length + warnings.length} findings`}
+                </summary>
+                <ScanFindings findings={[...blockers, ...warnings]} />
+              </details>
+            ) : null}
+          </div>
+        ) : null}
+
+        {rejecting ? (
+          <form
+            style={{ display: "grid", gap: 14, marginTop: 20, maxWidth: 560 }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (reason.trim()) onAction(sub.id, "reject", reason.trim());
             }}
-            disabled={actionInProgress}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-card border border-border text-foreground text-[13px] font-medium hover:bg-destructive/10 hover:border-destructive/40 hover:text-destructive disabled:opacity-50 transition-colors"
           >
-            <X className="w-3.5 h-3.5" />
+            <div className="bw-form-field">
+              <label htmlFor={reasonId} className="bw-label">
+                Reason for rejecting {sub.extensionName}
+              </label>
+              <textarea
+                id={reasonId}
+                className="bw-input"
+                rows={3}
+                autoFocus
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                aria-describedby={`${reasonId}-help`}
+              />
+              <p className="bw-help" id={`${reasonId}-help`}>
+                The author reads this. Say what to change so the next submission passes.
+              </p>
+            </div>
+            <div className="bw-btns">
+              <button type="submit" className="bw-btn" disabled={actionInProgress || !reason.trim()}>
+                {actionInProgress ? "Rejecting…" : "Reject the submission"}
+              </button>
+              <button type="button" className="bw-btn bw-btn-ghost" onClick={() => setRejecting(false)} disabled={actionInProgress}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </div>
+
+      {rejecting ? null : (
+        <div className="dx-rows-actions" style={{ flexDirection: "column", alignItems: "stretch" }}>
+          <button type="button" onClick={() => onAction(sub.id, "approve")} disabled={actionInProgress} className="bw-btn bw-btn-sm">
+            <Check size={16} {...ICON} />
+            {actionInProgress ? "Approving…" : "Approve"}
+          </button>
+          <button type="button" onClick={() => setRejecting(true)} disabled={actionInProgress} className="bw-btn bw-btn-ghost bw-btn-sm">
+            <X size={16} {...ICON} />
             Reject
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function FindingsList({
-  blockers,
-  warnings,
-}: {
-  blockers: ScanFinding[];
-  warnings: ScanFinding[];
-}) {
-  return (
-    <ul className="mt-2 space-y-1.5">
-      {blockers.map((f, i) => (
-        <FindingRow key={`b-${i}`} finding={f} tone="block" />
-      ))}
-      {warnings.map((f, i) => (
-        <FindingRow key={`w-${i}`} finding={f} tone="warn" />
-      ))}
-    </ul>
-  );
-}
-
-function FindingRow({
-  finding: f,
-  tone,
-}: {
-  finding: ScanFinding;
-  tone: "block" | "warn";
-}) {
-  return (
-    <li
-      className={`flex items-start gap-2 px-2 py-1.5 rounded-sm text-[12px] ${
-        tone === "block"
-          ? "bg-destructive/5 border border-destructive/20"
-          : "bg-warning/5 border border-warning/20"
-      }`}
-    >
-      <code className="font-mono text-[10px] px-1.5 py-0.5 rounded-sm bg-card border border-border text-foreground shrink-0">
-        {f.rule}
-      </code>
-      <div className="min-w-0 flex-1">
-        <p className="text-foreground">{f.message}</p>
-        {(f.file || f.line) && (
-          <p className="text-[10px] text-muted-foreground mt-0.5 font-mono truncate">
-            {f.file}
-            {f.line ? `:${f.line}` : ""}
-          </p>
-        )}
-        {f.snippet && (
-          <pre className="mt-1 px-2 py-1 rounded-sm bg-muted/60 text-[10px] font-mono text-muted-foreground overflow-x-auto">
-            {f.snippet}
-          </pre>
-        )}
-      </div>
+      )}
     </li>
   );
 }

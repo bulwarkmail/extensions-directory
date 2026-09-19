@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
+import { ArrowUpRight, BadgeCheck } from "lucide-react";
 import { getExtensions, getAuthorByLogin } from "@/lib/db/queries";
 import { ExtensionGrid } from "@/components/extension-grid";
+import { ICON } from "@/components/icon";
 import type { Metadata } from "next";
 
 interface Props {
@@ -46,55 +48,48 @@ export default async function AuthorPage({ params }: Props) {
     // DB not available
   }
 
+  const count = extensions.length;
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* Author header */}
-      <div className="flex items-start gap-4">
-        {author.avatarUrl ? (
-          <img
-            src={author.avatarUrl}
-            alt={author.displayName}
-            className="h-16 w-16 rounded-full"
-          />
-        ) : (
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-bold text-muted-foreground">
-            {author.displayName?.charAt(0).toUpperCase() ?? "?"}
+    <>
+      {/* The initial stands in for a picture, so the page makes no request to
+          GitHub from the browser. */}
+      <section className="bw-field">
+        <div className="bw-w dx-hero dx-hero-sm">
+          <div className="dx-dhero-title">
+            <span className="dx-initial dx-initial-lg" aria-hidden="true">
+              {author.displayName?.charAt(0).toUpperCase() ?? "?"}
+            </span>
+            <h1 className="bw-h1">{author.displayName}</h1>
           </div>
-        )}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {author.displayName}
-          </h1>
-          <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-            <a
-              href={`https://github.com/${author.githubLogin}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors hover:text-foreground"
-            >
-              @{author.githubLogin}
+          <p className="dx-byline">
+            <a href={`https://github.com/${author.githubLogin}`} target="_blank" rel="noopener noreferrer">
+              @{author.githubLogin} on GitHub
             </a>
-            {author.verified && (
-              <span className="text-info" title="Verified">
-                ✓ Verified
-              </span>
-            )}
-          </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {extensions.length} extension{extensions.length !== 1 ? "s" : ""}{" "}
-            published
+            <ArrowUpRight size={16} {...ICON} />
+            {author.verified ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <BadgeCheck size={16} {...ICON} />
+                verified author
+              </>
+            ) : null}
+          </p>
+          <p className="bw-lead">
+            {count === 0
+              ? "No published extensions yet."
+              : `${count} published ${count === 1 ? "extension" : "extensions"} in the directory.`}
           </p>
         </div>
-      </div>
+      </section>
 
-      {/* Extensions */}
-      <div className="mt-8">
+      <div className="bw-w dx-sec">
         <ExtensionGrid
           extensions={extensions}
-          emptyTitle="No extensions yet"
-          emptyMessage="This author hasn't published any extensions."
+          emptyTitle="Nothing published yet."
+          emptyMessage="Extensions by this author appear here once a reviewer approves them."
         />
       </div>
-    </div>
+    </>
   );
 }

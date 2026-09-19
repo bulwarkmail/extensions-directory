@@ -1,91 +1,25 @@
-import { cn } from "@/lib/utils";
-
-const SANS = "var(--font-exo2), system-ui, sans-serif";
-const SERIF = "var(--font-source-serif), 'Source Serif 4', Georgia, serif";
-const MONO = "var(--font-jetbrains), ui-monospace, monospace";
-
 interface PageHeaderProps {
-  eyebrow?: React.ReactNode;
   title: string;
-  titleAccent?: string;
+  /** One sentence under the title. Text on the field is full white, never muted. */
   description?: React.ReactNode;
+  /** Buttons, shown under the sentence. */
   children?: React.ReactNode;
-  className?: string;
+  /** The shorter header used on list and search pages. */
+  compact?: boolean;
 }
 
-export function PageHeader({
-  eyebrow,
-  title,
-  titleAccent,
-  description,
-  children,
-  className,
-}: PageHeaderProps) {
+/**
+ * The page header on the raspberry field, for catalogue, list, search and
+ * author pages. Working pages (submit, dashboard, admin) keep only the nav on
+ * the field and use a plain heading on white instead.
+ */
+export function PageHeader({ title, description, children, compact }: PageHeaderProps) {
   return (
-    <section
-      className={cn(
-        "relative overflow-hidden border-b border-[color:var(--rule)] px-5 sm:px-8 lg:px-14",
-        className
-      )}
-    >
-      <div className="mx-auto max-w-[1440px] py-14 sm:py-20">
-        {eyebrow && (
-          <div
-            className="mb-5 inline-flex items-center gap-1.5 text-[color:var(--rasp)]"
-            style={{
-              fontFamily: MONO,
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-            }}
-          >
-            {eyebrow}
-          </div>
-        )}
-        <h1
-          className="text-foreground"
-          style={{
-            fontFamily: SANS,
-            fontWeight: 800,
-            letterSpacing: "-0.045em",
-            lineHeight: 0.95,
-            fontSize: "clamp(2.25rem, 6vw, 5rem)",
-            maxWidth: 1100,
-            margin: 0,
-          }}
-        >
-          {title}
-          {titleAccent ? (
-            <>
-              {" "}
-              <span
-                style={{
-                  color: "var(--rasp)",
-                  fontFamily: SERIF,
-                  fontStyle: "italic",
-                  fontWeight: 400,
-                }}
-              >
-                {titleAccent}
-              </span>
-            </>
-          ) : null}
-        </h1>
-        {description && (
-          <p
-            className="mt-5 text-foreground/70"
-            style={{
-              fontFamily: SANS,
-              fontSize: "clamp(1rem, 1.2vw, 1.125rem)",
-              lineHeight: 1.5,
-              maxWidth: 720,
-            }}
-          >
-            {description}
-          </p>
-        )}
-        {children && <div className="mt-7">{children}</div>}
+    <section className="bw-field">
+      <div className={`bw-w dx-hero${compact ? " dx-hero-sm" : ""}`}>
+        <h1 className="bw-h1">{title}</h1>
+        {description ? <p className="bw-lead">{description}</p> : null}
+        {children ? <div className="bw-btns">{children}</div> : null}
       </div>
     </section>
   );

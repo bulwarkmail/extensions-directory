@@ -3,26 +3,27 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowRight, Menu, Moon, Search, Sun, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowRight, ArrowUpRight, Github, Menu, Moon, Sun, X } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { BulwarkMark } from "@/components/bulwark-mark";
-import { UserMenu } from "@/components/user-menu";
+import { UserMenu, type Me } from "@/components/user-menu";
+import { ICON } from "@/components/icon";
 
 const navLinks: { label: string; href: string; external?: boolean }[] = [
   { label: "Plugins", href: "/plugins" },
   { label: "Themes", href: "/themes" },
-  { label: "Submit", href: "/submit" },
-  {
-    label: "Docs",
-    href: "https://bulwarkmail.org/docs/extensions/introduction",
-    external: true,
-  },
+  { label: "Docs", href: "https://bulwarkmail.org/docs/extensions/introduction", external: true },
+  { label: "bulwarkmail.org", href: "https://bulwarkmail.org", external: true },
 ];
 
+/**
+ * The nav sits on the field on every page, as on bulwarkmail.org. It is not
+ * sticky and has no scroll state. Every control in it is 36px high.
+ */
 export function NavHeader() {
-  const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [me, setMe] = useState<Me | null>(null);
+  const [loading, setLoading] = useState(true);
   const { setTheme, resolvedTheme } = useTheme();
   const pathname = usePathname();
   const mounted = useSyncExternalStore(
@@ -30,180 +31,105 @@ export function NavHeader() {
     () => true,
     () => false
   );
+  const dark = mounted && resolvedTheme === "dark";
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+    let alive = true;
+    fetch("/api/v1/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (alive) setMe(data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [pathname]);
+
+  // Close the phone menu when the route changes.
+  const [menuPath, setMenuPath] = useState(pathname);
+  if (menuPath !== pathname) {
+    setMenuPath(pathname);
+    setMobileOpen(false);
+  }
+
+  const current = (href: string) => (pathname === href || pathname.startsWith(href + "/") ? "page" : undefined);
+
+  const renderLink = (link: (typeof navLinks)[number], onClick?: () => void) =>
+    link.external ? (
+      <a key={link.href} href={link.href} target="_blank" rel="noopener noreferrer" onClick={onClick}>
+        {link.label}
+        <ArrowUpRight size={16} {...ICON} />
+      </a>
+    ) : (
+      <Link key={link.href} href={link.href} aria-current={current(link.href)} onClick={onClick}>
+        {link.label}
+      </Link>
+    );
 
   return (
-    <header
-      className={cn(
-        "sticky top-0 z-50 transition-colors duration-200",
-        scrolled
-          ? "bg-background/85 supports-[backdrop-filter]:backdrop-blur-xl border-b border-[color:var(--rule)]"
-          : "bg-transparent border-b border-transparent"
-      )}
-    >
-      <div className="px-5 sm:px-8 lg:px-14">
-        <div className="mx-auto max-w-[1440px] grid grid-cols-[auto_1fr_auto] items-stretch">
-          {/* Cell 1 — mark + wordmark */}
-          <Link
-            href="/"
-            className="flex items-center gap-3 pr-5 sm:pr-8 lg:pr-14 py-5 border-r border-[color:var(--rule)]"
-          >
-            <BulwarkMark size={26} color="var(--rasp)" />
-            <span
-              className="font-extrabold tracking-tight text-[19px] leading-none"
-              style={{ fontFamily: "var(--font-exo2)" }}
-            >
-              Bulwark
-              <span className="ml-1.5 font-medium text-foreground/65">
-                Extensions
-              </span>
+    <header className="bw-field">
+      <div className="bw-w">
+        <div className="bw-nav-in">
+          <Link href="/" className="bw-brandmark">
+            <BulwarkMark size={24} color="currentColor" />
+            <span>
+              Bulwark <span className="dx-wordmark-sub">Extensions</span>
             </span>
           </Link>
 
-          {/* Cell 2 — primary nav */}
-          <nav className="hidden md:flex items-center gap-7 px-7">
-            {navLinks.map((link) => {
-              const active = link.external
-                ? false
-                : link.href === "/"
-                  ? pathname === "/"
-                  : pathname.startsWith(link.href);
-              const className = cn(
-                "text-[14px] font-medium transition-colors",
-                active
-                  ? "text-foreground"
-                  : "text-foreground/70 hover:text-[color:var(--rasp)]"
-              );
-              return link.external ? (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  className={className}
-                  style={{ fontFamily: "var(--font-exo2)" }}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {link.label}
-                </a>
-              ) : (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={className}
-                  style={{ fontFamily: "var(--font-exo2)" }}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
+          <nav className="bw-nav-links" aria-label="Main">
+            {navLinks.map((l) => renderLink(l))}
           </nav>
 
-          {/* Cell 3 — actions */}
-          <div className="flex items-center justify-end gap-3 pl-5 sm:pl-8 lg:pl-14 border-l border-[color:var(--rule)]">
-            <Link
-              href="/search"
-              className="hidden md:inline-flex p-2 text-foreground/70 hover:text-foreground transition-colors"
-              aria-label="Search extensions"
-            >
-              <Search className="w-4 h-4" />
-            </Link>
+          <div className="bw-nav-r">
             <button
-              onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-              className="hidden md:inline-flex p-2 text-foreground/70 hover:text-foreground transition-colors"
-              aria-label="Toggle theme"
+              type="button"
+              onClick={() => setTheme(dark ? "light" : "dark")}
+              className="bw-iconbtn"
+              aria-label="Switch between light and dark"
             >
-              {mounted && resolvedTheme === "dark" ? (
-                <Sun className="w-4 h-4" />
-              ) : (
-                <Moon className="w-4 h-4" />
-              )}
+              {dark ? <Sun size={16} {...ICON} /> : <Moon size={16} {...ICON} />}
             </button>
-            <Link
-              href="/submit"
-              className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-semibold bg-[color:var(--rasp)] text-white hover:bg-[#c12649] transition-colors"
-              style={{ fontFamily: "var(--font-exo2)" }}
-            >
-              Submit
-              <ArrowRight className="w-3.5 h-3.5" />
+            <UserMenu me={me} loading={loading} onSignedOut={() => setMe(null)} />
+            <Link href="/submit" className="bw-btn bw-btn-sm">
+              Submit an extension
+              <ArrowRight size={16} {...ICON} />
             </Link>
-            <div className="hidden md:block">
-              <UserMenu />
-            </div>
             <button
-              className="md:hidden p-2 text-foreground/80"
-              onClick={() => setMobileOpen((v) => !v)}
-              aria-label="Toggle menu"
+              type="button"
+              className="bw-iconbtn bw-nav-phone"
+              onClick={() => setMobileOpen(!mobileOpen)}
+              aria-label={mobileOpen ? "Close the menu" : "Open the menu"}
+              aria-expanded={mobileOpen}
             >
-              {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileOpen ? <X size={20} {...ICON} /> : <Menu size={20} {...ICON} />}
             </button>
           </div>
         </div>
-      </div>
 
-      {mobileOpen ? (
-        <div className="md:hidden bg-background border-t border-[color:var(--rule)]">
-          <div className="px-5 py-4 flex flex-col gap-1">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileOpen(false)}
-                className="px-2 py-2.5 text-sm text-foreground/85 hover:text-[color:var(--rasp)]"
-                style={{ fontFamily: "var(--font-exo2)" }}
-              >
-                {link.label}
-              </Link>
-            ))}
-            <Link
-              href="/search"
-              onClick={() => setMobileOpen(false)}
-              className="px-2 py-2.5 text-sm text-foreground/85 hover:text-[color:var(--rasp)]"
-              style={{ fontFamily: "var(--font-exo2)" }}
-            >
+        {mobileOpen ? (
+          <nav className="bw-nav-menu bw-nav-phone" aria-label="Main">
+            {navLinks.map((l) => renderLink(l, () => setMobileOpen(false)))}
+            <Link href="/search" onClick={() => setMobileOpen(false)}>
               Search
             </Link>
-            <div className="h-px bg-[color:var(--rule)] my-2" />
-            <div className="flex items-center justify-between gap-3 px-2 py-2">
-              <button
-                onClick={() => {
-                  setTheme(resolvedTheme === "dark" ? "light" : "dark");
-                  setMobileOpen(false);
-                }}
-                className="inline-flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground"
-                aria-label="Toggle theme"
-              >
-                {mounted && resolvedTheme === "dark" ? (
-                  <>
-                    <Sun className="w-4 h-4" /> Light
-                  </>
-                ) : (
-                  <>
-                    <Moon className="w-4 h-4" /> Dark
-                  </>
-                )}
-              </button>
-              <div className="flex items-center gap-2">
-                <Link
-                  href="/submit"
-                  onClick={() => setMobileOpen(false)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-[color:var(--rasp)] text-white"
-                  style={{ fontFamily: "var(--font-exo2)" }}
-                >
-                  Submit
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-                <UserMenu compact />
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+            {!loading && !me?.author ? (
+              <a href="/api/v1/auth/github">
+                <Github size={16} {...ICON} style={{ display: "inline", verticalAlign: "-2px", marginRight: 8 }} />
+                Sign in with GitHub
+              </a>
+            ) : null}
+            <Link href="/submit" className="bw-btn" onClick={() => setMobileOpen(false)}>
+              Submit an extension
+              <ArrowRight size={16} {...ICON} />
+            </Link>
+          </nav>
+        ) : null}
+      </div>
     </header>
   );
 }
