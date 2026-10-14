@@ -1,0 +1,45 @@
+name: Publish to Bulwark Extensions
+description: Submit a Bulwark Webmail plugin or theme to extensions.bulwarkmail.org for review, with trusted publishing (no secrets).
+author: Bulwark Mail
+branding:
+  icon: upload-cloud
+  color: red
+inputs:
+  subpath:
+    description: Folder that holds manifest.json, for a repository with several extensions.
+    required: false
+    default: ""
+  ref:
+    description: Must match the ref this workflow runs for. The commit built is always the workflow's own commit.
+    required: false
+    default: ""
+  dry-run:
+    description: Build and check only; nothing is queued for review. Works on branches and pull requests.
+    required: false
+    default: "false"
+  wait:
+    description: Wait for the build and checks, and fail the job if they fail.
+    required: false
+    default: "true"
+  token:
+    description: An API token (bwx_…) instead of trusted publishing. Needs `slug`.
+    required: false
+    default: ""
+  slug:
+    description: The extension id; only needed with `token`.
+    required: false
+    default: ""
+  directory-url:
+    description: The extension directory.
+    required: false
+    default: https://extensions.bulwarkmail.org
+outputs:
+  submission-id:
+    description: The submission's id.
+  submission-url:
+    description: Where to follow the submission.
+  status:
+    description: The submission's status when the step finished (awaiting_review on success).
+runs:
+  using: node24
+  main: dist/index.js

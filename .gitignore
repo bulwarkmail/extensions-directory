@@ -54,3 +54,4 @@ next-env.d.ts
 
 # bundled deploy scripts (npm run build:scripts)
 /deploy/dist/
+/packages/cli/dist/

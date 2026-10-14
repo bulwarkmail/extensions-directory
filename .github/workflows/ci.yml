@@ -38,6 +38,13 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Bundles build
+        run: |
+          npm run build:scripts
+          npm run build:cli
+          # action/dist is committed because GitHub runs it from the repository.
+          git diff --exit-code action/dist || { echo "action/dist is out of date: run npm run build:cli and commit it"; exit 1; }
+
       - name: Build
         run: npm run build
         env:

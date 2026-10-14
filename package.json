@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build:scripts": "esbuild scripts/post-migrate.ts --bundle --platform=node --target=node22 --format=cjs --external:sharp --external:better-sqlite3 --outdir=deploy/dist --out-extension:.js=.cjs"
+    "build:scripts": "esbuild scripts/post-migrate.ts --bundle --platform=node --target=node22 --format=cjs --external:sharp --external:better-sqlite3 --outfile=deploy/dist/post-migrate.cjs && esbuild worker/main.ts --bundle --platform=node --target=node22 --format=cjs --external:sharp --external:better-sqlite3 --outfile=deploy/dist/worker.cjs",
+    "build:cli": "esbuild packages/cli/src/cli.ts --bundle --platform=node --target=node20 --format=cjs --outfile=packages/cli/dist/cli.js --external:sharp --external:better-sqlite3 && esbuild action/src/main.ts --bundle --platform=node --target=node20 --format=cjs --outfile=action/dist/index.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",
