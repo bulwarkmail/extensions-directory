@@ -1,25 +1,10 @@
 import { NextRequest } from "next/server";
-import { getExtensions } from "@/lib/db/queries";
 import { jsonResponse, errorResponse } from "@/lib/utils";
-import { v1ListItem } from "@/lib/v1/serialize";
+import { v1List } from "@/lib/v1/catalog";
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = request.nextUrl;
-
-    const result = await getExtensions({
-      type: (searchParams.get("type") as "plugin" | "theme") || undefined,
-      pluginType: searchParams.get("pluginType") || undefined,
-      tag: searchParams.get("tag") || undefined,
-      authorLogin: searchParams.get("author") || undefined,
-      q: searchParams.get("q") || undefined,
-      sort: searchParams.get("sort") || "newest",
-      order: (searchParams.get("order") as "asc" | "desc") || "desc",
-      page: parseInt(searchParams.get("page") || "1", 10),
-      perPage: parseInt(searchParams.get("perPage") || "24", 10),
-    });
-
-    return jsonResponse({ ...result, data: result.data.map((e) => v1ListItem(e, true)) });
+    return jsonResponse(v1List(request.nextUrl.searchParams));
   } catch (error) {
     console.error("Error fetching extensions:", error);
     return errorResponse("Internal server error", 500);

@@ -76,6 +76,7 @@ async function addVersion(opts: {
     scanStatus: "clean",
     scanReport: { findings: [], fileCount: 2, blocked: false },
     reviewStatus: opts.reviewStatus ?? "approved",
+    channel: opts.version.includes("-") ? "beta" : "stable",
     reviewerId: "admin-1",
     reviewNotes: "looks fine",
     publishedAt: T(opts.createdAt),

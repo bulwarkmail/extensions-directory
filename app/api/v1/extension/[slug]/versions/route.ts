@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { getExtensionBySlug, getExtensionVersions } from "@/lib/db/queries";
+import { extensionBySlug, releasesOf } from "@/lib/catalog";
+import { listedVersions } from "@/lib/v1/catalog";
 import { jsonResponse, errorResponse } from "@/lib/utils";
 
 export async function GET(
@@ -8,14 +9,11 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
-    const extension = await getExtensionBySlug(slug);
-
-    if (!extension || extension.status !== "approved") {
+    const row = extensionBySlug(slug);
+    if (!row || row.e.status !== "approved") {
       return errorResponse("Extension not found", 404);
     }
-
-    const versions = await getExtensionVersions(extension.id);
-
+    const versions = listedVersions(releasesOf([row.e.id]).get(row.e.id) ?? []);
     return jsonResponse({
       data: versions.map((v) => ({
         version: v.version,

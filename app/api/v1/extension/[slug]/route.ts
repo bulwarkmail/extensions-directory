@@ -1,26 +1,17 @@
 import { NextRequest } from "next/server";
-import { getExtensionBySlug } from "@/lib/db/queries";
 import { jsonResponse, errorResponse } from "@/lib/utils";
-import { v1Detail } from "@/lib/v1/serialize";
+import { appVersionOf, v1ExtensionDetail } from "@/lib/v1/catalog";
 import { gone } from "@/lib/gone";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
     const { slug } = await params;
-    const extension = await getExtensionBySlug(slug);
-
-    if (!extension) {
-      return errorResponse("Extension not found", 404);
-    }
-
-    if (extension.status !== "approved") {
-      return errorResponse("Extension not found", 404);
-    }
-
-    return jsonResponse({ data: v1Detail(extension) });
+    const data = v1ExtensionDetail(slug, appVersionOf(request.nextUrl.searchParams));
+    if (!data) return errorResponse("Extension not found", 404);
+    return jsonResponse({ data });
   } catch (error) {
     console.error("Error fetching extension:", error);
     return errorResponse("Internal server error", 500);
