@@ -1,0 +1,15 @@
+{
+  "_type": "https://extensions.bulwarkmail.org/keyring/v1",
+  "rootKeyId": "bfcd5e1fcf810a7d",
+  "issuedAt": "2026-10-14T19:28:51.925Z",
+  "keys": [
+    {
+      "keyId": "c7fa1217ac0826ce",
+      "publicKey": "OAnmKm+OoK6QrQ1PAnwD4P9RXzUgp+Sq5khjg5QqlHE=",
+      "status": "active",
+      "notBefore": "2026-10-14T19:28:51.925Z",
+      "notAfter": null
+    }
+  ],
+  "signature": "7fdaqtVptULRiRHFl6Abc61EK9Z3RGAPOEx8NkCgRKAbb+GoL/G6Vfn+rS/ZKRMdZc7jypkmcSfkW0DPDSvfAw=="
+}
