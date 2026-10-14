@@ -36,17 +36,10 @@ async function main() {
   migrate(drizzle(sqlite), { migrationsFolder: path.join(__dirname, "..", "drizzle", "migrations") });
   console.log(`migrations: ${before} applied before, ${count()} after`);
 
-  // Re-encode images stored before lib/images.ts (scripts/reencode-media.ts).
-  // Converted rows are skipped, so this is quick once done. A failure here
-  // doesn't stop the deploy: unconverted images are simply not served.
-  const reencode = path.join(__dirname, "dist", "reencode-media.cjs");
-  if (fs.existsSync(reencode)) {
-    try {
-      await require(reencode).run(sqlite, uploadsDir());
-    } catch (err) {
-      console.error("media: conversion failed, images stay unconverted:", err);
-    }
-  }
+  // Data steps (scripts/post-migrate.ts): latest-version caches, image
+  // re-encoding, and a check of the data against the files. All idempotent.
+  const post = path.join(__dirname, "dist", "post-migrate.cjs");
+  if (fs.existsSync(post)) await require(post).run(sqlite, uploadsDir());
   sqlite.close();
 }
 
