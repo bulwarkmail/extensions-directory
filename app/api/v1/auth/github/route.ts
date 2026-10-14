@@ -1,18 +1,15 @@
 import { NextRequest } from "next/server";
-import { getGitHubAuthUrl } from "@/lib/github";
-import { getAuthorSession } from "@/lib/auth";
 import crypto from "crypto";
+import { authorizeUrl, safeReturnTo } from "@/lib/auth/github-oauth";
+import { getSession } from "@/lib/auth/session";
 
+// Starts the GitHub sign-in. The path stays /api/v1/auth/github because the
+// OAuth app's callback URL is registered under it.
 export async function GET(request: NextRequest) {
-  const returnTo = request.nextUrl.searchParams.get("returnTo") || "/submit";
   const state = crypto.randomBytes(16).toString("hex");
-
-  // Store state in session for CSRF protection
-  const session = await getAuthorSession();
+  const session = await getSession();
   session.oauthState = state;
-  session.oauthReturnTo = returnTo;
+  session.oauthReturnTo = safeReturnTo(request.nextUrl.searchParams.get("returnTo"));
   await session.save();
-
-  const authUrl = getGitHubAuthUrl(state);
-  return Response.redirect(authUrl);
+  return Response.redirect(authorizeUrl(state));
 }

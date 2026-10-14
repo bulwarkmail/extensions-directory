@@ -5,9 +5,29 @@ const DOCS_BASE = "https://bulwarkmail.org/docs/extensions";
 const nextConfig: NextConfig = {
   output: "standalone",
   reactCompiler: true,
-  serverExternalPackages: ["better-sqlite3"],
+  serverExternalPackages: ["better-sqlite3", "sharp"],
   turbopack: {
     root: import.meta.dirname,
+  },
+  // Read at runtime by app/publishing/page.tsx.
+  outputFileTracingIncludes: {
+    "/publishing": ["./content/**"],
+  },
+  async rewrites() {
+    return [{ source: "/.well-known/bulwark-extension-keys.json", destination: "/api/v2/keys" }];
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
+    ];
   },
   async redirects() {
     return [
@@ -33,7 +53,7 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/docs/publishing",
-        destination: `${DOCS_BASE}/publishing`,
+        destination: "/publishing",
         permanent: true,
       },
     ];

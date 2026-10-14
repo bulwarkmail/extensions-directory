@@ -7,7 +7,17 @@ import { ExtIcon, formatTypeLabel } from "@/components/ext-icon";
 import { ICON } from "@/components/icon";
 import { formatDownloads, formatDate, formatBytes, timeAgo } from "@/lib/utils";
 import { renderMarkdown } from "@/lib/markdown";
+import { advisoriesFor, ratingSummary } from "@/lib/catalog";
+import { ratingsOf } from "@/lib/community";
+import { currentUser } from "@/lib/auth/session";
+import { source } from "@/lib/sources";
+import { RateForm, ReportForm } from "./forms";
 import type { Metadata } from "next";
+
+const firstLine = (s: string) => {
+  const line = s.split(/\r?\n/).map((l) => l.replace(/^[#*\-\s]+/, "").trim()).find(Boolean) ?? "";
+  return line.length > 140 ? `${line.slice(0, 140)}…` : line;
+};
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -37,13 +47,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 // githubRepo arrives as "owner/repo" from submissions and as a full URL from
 // the seed script; show and link both correctly without touching the data.
-function repoParts(githubRepo: string, subpath: string | null) {
-  const name = githubRepo.replace(/^https?:\/\/github\.com\//, "").replace(/\/+$/, "");
+function repoParts(host: string, repo: string, subpath: string | null) {
   const sub = (subpath ?? "").replace(/^\/+|\/+$/g, "");
-  return {
-    label: sub ? `${name}/${sub}` : name,
-    href: `https://github.com/${name}${sub ? `/tree/HEAD/${sub}` : ""}`,
-  };
+  let href: string;
+  try {
+    href = source(host).repoUrl(repo);
+  } catch {
+    href = `https://${host}/${repo}`;
+  }
+  return { label: `${host === "github.com" ? "" : `${host}/`}${repo}${sub ? `/${sub}` : ""}`, href };
 }
 
 export default async function ExtensionDetailPage({ params }: Props) {
@@ -64,7 +76,11 @@ export default async function ExtensionDetailPage({ params }: Props) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "";
   const typeLabel = formatTypeLabel(extension.type, extension.pluginType);
   const isPlugin = extension.type === "plugin";
-  const repo = extension.githubRepo ? repoParts(extension.githubRepo, extension.subpath) : null;
+  const repo = extension.githubRepo ? repoParts(extension.sourceHost, extension.githubRepo, extension.subpath) : null;
+  const advisories = advisoriesFor(extension.id).map((a) => ({ ...a, affectsLatest: latestVersion ? advisoriesFor(extension.id, latestVersion.version).some((x) => x.id === a.id) : false }));
+  const rating = ratingSummary([extension.id]).get(extension.id);
+  const reviews = ratingsOf(extension.id, 20);
+  const user = await currentUser();
   const pictures = [
     ...extension.screenshots.map((s) => ({ key: s.id, path: s.path, caption: s.altText || null, alt: s.altText || `${extension.name} screenshot` })),
     ...extension.themePreviews.map((p) => ({
@@ -126,6 +142,18 @@ export default async function ExtensionDetailPage({ params }: Props) {
       </header>
 
       <div className="bw-w dx-sec">
+        {extension.deprecatedAt ? (
+          <p className="bw-note bw-note-warning">
+            This extension is deprecated{extension.deprecationMessage ? `: ${extension.deprecationMessage}` : "."}
+            {extension.replacementSlug ? <> Use <Link className="bw-link" href={`/extension/${extension.replacementSlug}`}>{extension.replacementSlug}</Link> instead.</> : null}
+          </p>
+        ) : null}
+        {advisories.map((a) => (
+          <div key={a.id} className="bw-note bw-note-warning">
+            <strong>Security advisory {a.id} ({a.severity})</strong>: {a.summary} Affects {a.affected}{a.fixedIn ? `, fixed in ${a.fixedIn}` : ""}.
+            {a.details ? <div className="ext-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(a.details) }} /> : null}
+          </div>
+        ))}
         <div className="dx-split">
           <div className="dx-stack">
             {extension.longDescription ? (
@@ -162,6 +190,7 @@ export default async function ExtensionDetailPage({ params }: Props) {
                         <th scope="col">Version</th>
                         <th scope="col">Released</th>
                         <th scope="col">Changes</th>
+                        <th scope="col">Built from</th>
                         <th scope="col" className="num">
                           Size
                         </th>
@@ -173,9 +202,10 @@ export default async function ExtensionDetailPage({ params }: Props) {
                     <tbody>
                       {extension.versions.map((v) => (
                         <tr key={v.id}>
-                          <td>{v.version}</td>
+                          <td><Link className="bw-link" href={`/extension/${extension.slug}/versions/${encodeURIComponent(v.version)}`}>{v.version}</Link></td>
                           <td style={{ whiteSpace: "nowrap" }}>{formatDate(v.publishedAt)}</td>
-                          <td>{v.changelog || "No notes"}</td>
+                          <td>{v.changelog ? firstLine(v.changelog) : "No notes"}</td>
+                          <td>{v.sourceCommit ? <code className="bw-icode">{v.sourceCommit.slice(0, 7)}</code> : <span className="bw-muted">{v.sourceRef ?? ""}</span>}{v.signature ? " ✓ signed" : ""}</td>
                           <td className="num" style={{ whiteSpace: "nowrap" }}>
                             {formatBytes(v.bundleSize)}
                           </td>
@@ -191,6 +221,22 @@ export default async function ExtensionDetailPage({ params }: Props) {
                 </div>
               </section>
             ) : null}
+            <section>
+              <h2 className="dx-h2">Ratings</h2>
+              <p>{rating ? `${rating.average} out of 5 from ${rating.count} ${rating.count === 1 ? "rating" : "ratings"}.` : "No ratings yet."}</p>
+              {reviews.filter((r) => r.body).slice(0, 10).map((r) => (
+                <blockquote key={r.id} className="dx-review">
+                  <p><span aria-label={`${r.stars} stars`}>{"★".repeat(r.stars)}{"☆".repeat(5 - r.stars)}</span> @{r.login}</p>
+                  <p style={{ whiteSpace: "pre-wrap" }}>{r.body}</p>
+                </blockquote>
+              ))}
+              {user ? <RateForm slug={extension.slug} /> : <p className="bw-help"><a className="bw-link" href={`/api/v1/auth/github?returnTo=${encodeURIComponent(`/extension/${extension.slug}`)}`}>Sign in with GitHub</a> to rate it.</p>}
+            </section>
+
+            <section>
+              <h2 className="dx-h2">Report a problem</h2>
+              <ReportForm slug={extension.slug} versions={extension.versions.map((v) => v.version)} />
+            </section>
           </div>
 
           <aside className="dx-stack" style={{ gap: 40 }}>

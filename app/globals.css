@@ -1712,3 +1712,103 @@ a.dx-rows-name:hover {
   padding: 10px 16px 10px 0;
   border-bottom: 1px solid var(--bw-rule);
 }
+
+/* ── Publishing rework: dashboard, review and admin pieces ───────────────── */
+.dx-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0 0 32px;
+  border-bottom: 1px solid var(--bw-rule);
+}
+.dx-tab {
+  padding: 10px 0;
+  color: var(--bw-text-muted);
+  font-size: var(--bw-small);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.dx-tab:hover {
+  color: var(--bw-text);
+}
+.dx-tab[aria-current="page"] {
+  color: var(--bw-text);
+  border-bottom-color: var(--bw-brand);
+}
+.dx-sec-block {
+  margin-top: 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dx-details > summary {
+  cursor: pointer;
+  font-size: var(--bw-small);
+  color: var(--bw-link);
+  padding: 6px 0;
+}
+.dx-details[open] > summary {
+  margin-bottom: 12px;
+}
+.dx-log {
+  max-height: 480px;
+  overflow: auto;
+  white-space: pre;
+  font-size: var(--bw-code);
+}
+.dx-diff .dx-add {
+  display: block;
+  background: color-mix(in srgb, var(--bw-success) 14%, transparent);
+}
+.dx-diff .dx-del {
+  display: block;
+  background: color-mix(in srgb, var(--bw-error) 14%, transparent);
+}
+.dx-files {
+  display: grid;
+  grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
+  gap: 24px;
+}
+.dx-filelist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--bw-small);
+  max-height: 600px;
+  overflow: auto;
+}
+.dx-filelist li {
+  padding: 4px 0;
+  overflow-wrap: anywhere;
+}
+.dx-filelist button[aria-current="true"] {
+  color: var(--bw-text);
+  text-decoration: underline;
+}
+.dx-boxed {
+  border: 1px solid var(--bw-rule);
+  padding: 12px 16px;
+  min-height: 48px;
+}
+.dx-review {
+  margin: 0 0 16px;
+  padding: 0 0 0 16px;
+  border-left: 3px solid var(--bw-rule);
+}
+.dx-action {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dx-doc {
+  max-width: 760px;
+}
+.dx-doc pre {
+  overflow-x: auto;
+}
+@media (max-width: 720px) {
+  .dx-files {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,127 +1,51 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BadgeCheck, Minus } from "lucide-react";
+import type { Metadata } from "next";
+import { currentUser, hasRole } from "@/lib/auth/session";
+import { allAuthors } from "@/lib/dashboard";
 import { formatDate } from "@/lib/utils";
 import { Status } from "@/components/status";
-import { ICON } from "@/components/icon";
+import { ActionButton } from "@/components/client/action";
 
-interface Author {
-  id: string;
-  displayName: string;
-  githubLogin: string;
-  avatarUrl: string | null;
-  verified: boolean;
-  banned: boolean;
-  createdAt: string;
-}
+export const metadata: Metadata = { title: "Authors" };
 
-export default function AdminAuthorsPage() {
-  const [authors, setAuthors] = useState<Author[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  function fetchAuthors() {
-    fetch("/api/v1/admin/authors")
-      .then((r) => r.json())
-      .then((data) => setAuthors(data.authors ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(() => {
-    fetchAuthors();
-  }, []);
-
-  async function toggleBan(id: string, banned: boolean) {
-    await fetch("/api/v1/admin/authors", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        authorId: id,
-        action: banned ? "unban" : "ban",
-      }),
-    });
-    fetchAuthors();
-  }
-
+export default async function AdminAuthors({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const user = await currentUser();
+  if (!user || !hasRole(user.role, "admin")) return <p>Admins only.</p>;
+  const q = (await searchParams).q;
+  const rows = allAuthors(q);
   return (
     <div>
-      <div className="dx-work-head" style={{ marginBottom: 24 }}>
-        <div>
-          <h1 className="bw-h2">Authors</h1>
-          <p>Everyone who has signed in with GitHub. Banning an author hides their public page and their dashboard.</p>
-        </div>
-      </div>
-
-      {loading ? (
-        <p className="bw-help" aria-live="polite">
-          Loading authors…
-        </p>
-      ) : authors.length === 0 ? (
-        <p className="bw-help">No authors yet.</p>
-      ) : (
-        <div className="bw-table-wrap">
-          <table className="bw-table">
-            <thead>
-              <tr>
-                <th scope="col">Author</th>
-                <th scope="col">GitHub</th>
-                <th scope="col">Verified</th>
-                <th scope="col">Status</th>
-                <th scope="col">Joined</th>
-                <th scope="col">
-                  <span className="sr-only">Actions</span>
-                </th>
+      <h1 className="bw-h2">Accounts</h1>
+      <form className="dx-toolbar-form" action="/admin/authors">
+        <input className="bw-input" name="q" defaultValue={q} placeholder="GitHub login" aria-label="Search by GitHub login" />
+        <button className="bw-btn bw-btn-ghost" type="submit">Search</button>
+      </form>
+      <div className="bw-table-wrap">
+        <table className="bw-table">
+          <thead><tr><th scope="col">Account</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Joined</th><th scope="col"><span className="bw-muted">Actions</span></th></tr></thead>
+          <tbody>
+            {rows.map((a) => (
+              <tr key={a.id}>
+                <td><Link className="bw-link" href={`/author/${a.githubLogin}`}>@{a.githubLogin}</Link>{a.verified ? " ✓" : ""}<div className="bw-help">{a.email}</div></td>
+                <td>{a.role.replace("_", " ")}</td>
+                <td>{a.bannedAt ? <><Status value="banned" /><div className="bw-help">{a.bannedReason}</div></> : <Status value="active" />}</td>
+                <td style={{ whiteSpace: "nowrap" }}>{a.createdAt ? formatDate(a.createdAt) : ""}</td>
+                <td>
+                  <div className="dx-rowact">
+                    {a.bannedAt
+                      ? <ActionButton path={`/admin/authors/${a.id}`} body={{ action: "unban" }} label="Unban" ghost small />
+                      : a.id !== user.id ? <ActionButton path={`/admin/authors/${a.id}`} body={{ action: "ban" }} label="Ban" ghost small ask="Why? Banning ends their sessions, revokes their tokens and withdraws their open submissions." /> : null}
+                    <ActionButton path={`/admin/authors/${a.id}`} body={{ action: a.verified ? "unverify" : "verify" }} label={a.verified ? "Unverify" : "Verify"} ghost small />
+                    {user.role === "super_admin" && a.id !== user.id ? (
+                      <ActionButton path={`/admin/authors/${a.id}`} body={{ action: "role" }} label="Change role" ghost small ask="New role: author, reviewer, admin or super_admin" askField="role" />
+                    ) : null}
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {authors.map((author) => (
-                <tr key={author.id}>
-                  <td>
-                    <span style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 180 }}>
-                      <span className="dx-initial dx-initial-sm" aria-hidden="true">
-                        {author.displayName?.charAt(0).toUpperCase() ?? "?"}
-                      </span>
-                      {author.banned ? (
-                        author.displayName
-                      ) : (
-                        <Link href={`/author/${author.githubLogin}`} className="bw-link">
-                          {author.displayName}
-                        </Link>
-                      )}
-                    </span>
-                  </td>
-                  <td>@{author.githubLogin}</td>
-                  <td>
-                    {author.verified ? (
-                      <span className="dx-st">
-                        <BadgeCheck size={16} {...ICON} />
-                        Yes
-                      </span>
-                    ) : (
-                      <span className="dx-st dx-st-off">
-                        <Minus size={16} {...ICON} />
-                        No
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <Status value={author.banned ? "banned" : "active"} />
-                  </td>
-                  <td style={{ whiteSpace: "nowrap" }}>{formatDate(author.createdAt)}</td>
-                  <td>
-                    <button type="button" className="dx-textbtn" onClick={() => toggleBan(author.id, author.banned)}>
-                      {author.banned ? "Unban" : "Ban"}
-                      <span className="sr-only"> {author.displayName}</span>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

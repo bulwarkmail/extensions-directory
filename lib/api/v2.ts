@@ -415,7 +415,7 @@ const authorRoutes: Route[] = [
       const body = await readJson(ctx.request, 64 * 1024);
       const v = db.select().from(extensionVersions).where(and(eq(extensionVersions.extensionId, ext.id), eq(extensionVersions.version, ctx.params.version))).get();
       if (!v) throw new HttpError(404, "Version not found", "not_found");
-      if (body.maxAppVersion !== undefined) await setMaxAppVersion(ext, v.version, body.maxAppVersion === null ? null : str(body.maxAppVersion, "maxAppVersion", { max: 32 })!, actor, ctx.request);
+      if (body.maxAppVersion !== undefined) await setMaxAppVersion(ext, v.version, body.maxAppVersion === null || body.maxAppVersion === "" ? null : str(body.maxAppVersion, "maxAppVersion", { max: 32 })!, actor, ctx.request);
       const waiting: string[] = [];
       if (typeof body.changelog === "string") {
         await proposeTextChange(ext, "changelog", body.changelog, v.id, actor, ctx.request);

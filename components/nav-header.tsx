@@ -12,6 +12,7 @@ import { ICON } from "@/components/icon";
 const navLinks: { label: string; href: string; external?: boolean }[] = [
   { label: "Plugins", href: "/plugins" },
   { label: "Themes", href: "/themes" },
+  { label: "Publish", href: "/publishing" },
   { label: "Docs", href: "https://bulwarkmail.org/docs/extensions/introduction", external: true },
   { label: "bulwarkmail.org", href: "https://bulwarkmail.org", external: true },
 ];

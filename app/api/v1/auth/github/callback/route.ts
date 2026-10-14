@@ -1,74 +1,50 @@
 import { NextRequest } from "next/server";
-import { exchangeCodeForToken, getGitHubUser } from "@/lib/github";
-import { getAuthorSession, getAdminSession } from "@/lib/auth";
-import { getAuthorByGithubId, getAdminByGithubId } from "@/lib/db/queries";
+import crypto from "crypto";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { authors } from "@/lib/db/schema";
+import { exchangeCode, fetchProfile, safeReturnTo } from "@/lib/auth/github-oauth";
+import { getSession } from "@/lib/auth/session";
+import { isBanned } from "@/lib/auth/guard";
+import { audit } from "@/lib/audit";
 import { errorResponse } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
+  const site = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/+$/, "");
   try {
     const code = request.nextUrl.searchParams.get("code");
     const state = request.nextUrl.searchParams.get("state");
-
-    if (!code || !state) {
-      return errorResponse("Missing code or state", 400);
+    const session = await getSession();
+    const expected = session.oauthState;
+    if (!code || !state || !expected || state.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected))) {
+      return errorResponse("Sign-in expired or was started elsewhere. Try again.", 400);
     }
-
-    // Verify CSRF state
-    const session = await getAuthorSession();
-    const savedState = session.oauthState;
-    const returnTo = (session.oauthReturnTo as string) || "/submit";
-
-    if (state !== savedState) {
-      return errorResponse("Invalid state parameter", 400);
-    }
-
-    // Exchange code for token
-    const accessToken = await exchangeCodeForToken(code);
-    const githubUser = await getGitHubUser(accessToken);
-
-    // Find or create author
-    let author = await getAuthorByGithubId(githubUser.id);
-
-    if (!author) {
-      const result = await db
-        .insert(authors)
-        .values({
-          githubId: githubUser.id,
-          githubLogin: githubUser.login,
-          displayName: githubUser.name || githubUser.login,
-          avatarUrl: githubUser.avatar_url,
-          email: githubUser.email,
-          bio: githubUser.bio,
-          website: githubUser.blog,
-        })
-        .returning();
-      author = result[0];
-    }
-
-    // Set author session
-    session.authorId = author.id;
-    session.githubId = author.githubId;
-    session.githubLogin = author.githubLogin;
-    session.avatarUrl = author.avatarUrl ?? undefined;
+    const returnTo = safeReturnTo(session.oauthReturnTo);
     delete session.oauthState;
     delete session.oauthReturnTo;
-    await session.save();
 
-    // Check if user is also a directory admin
-    const admin = await getAdminByGithubId(githubUser.id);
-    if (admin) {
-      const adminSession = await getAdminSession();
-      adminSession.adminId = admin.id;
-      adminSession.githubId = admin.githubId;
-      adminSession.githubLogin = admin.githubLogin;
-      adminSession.role = admin.role;
-      await adminSession.save();
+    const profile = await fetchProfile(await exchangeCode(code));
+    const now = new Date();
+    let author = db.select().from(authors).where(eq(authors.githubId, profile.id)).get();
+    if (!author) {
+      author = db.insert(authors).values({
+        githubId: profile.id, githubLogin: profile.login, displayName: profile.name || profile.login, avatarUrl: profile.avatarUrl,
+        email: profile.email, bio: profile.bio, website: profile.blog, createdAt: now, updatedAt: now,
+      }).returning().get();
+      await audit({ kind: "author", id: author.id }, "author.sign_up", { kind: "author", id: author.id }, { login: profile.login }, request);
+    } else {
+      // GitHub logins can be renamed; keep the profile current.
+      db.update(authors).set({ githubLogin: profile.login, displayName: profile.name || profile.login, avatarUrl: profile.avatarUrl, email: profile.email ?? author.email, updatedAt: now })
+        .where(eq(authors.id, author.id)).run();
     }
-
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "";
-    return Response.redirect(`${siteUrl}${returnTo}`);
+    if (isBanned(author)) {
+      session.destroy();
+      return Response.redirect(`${site}/banned`);
+    }
+    session.authorId = author.id;
+    session.epoch = author.sessionEpoch;
+    await session.save();
+    return Response.redirect(`${site}${returnTo}`);
   } catch (error) {
     console.error("OAuth callback error:", error);
     return errorResponse("Authentication failed", 500);

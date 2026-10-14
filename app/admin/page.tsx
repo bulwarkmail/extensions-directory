@@ -1,86 +1,30 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Download, Palette, Puzzle, Users } from "lucide-react";
-import { ICON } from "@/components/icon";
+import type { Metadata } from "next";
+import { adminCounts } from "@/lib/dashboard";
 
-interface Stats {
-  extensions: number;
-  plugins: number;
-  themes: number;
-  authors: number;
-  totalDownloads: number;
-}
+export const metadata: Metadata = { title: "Admin" };
 
-export default function AdminDashboardPage() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [pending, setPending] = useState<number | null>(null);
-
-  useEffect(() => {
-    fetch("/api/v1/stats")
-      .then((r) => r.json())
-      .then((body) => setStats(body?.data ?? null))
-      .catch(() => {});
-
-    fetch("/api/v1/admin/submissions")
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data.submissions)) {
-          setPending(data.submissions.length);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const n = (v: number | undefined) => (v === undefined ? "…" : v.toLocaleString());
-
+export default function AdminOverview() {
+  const c = adminCounts();
+  const tiles = [
+    { href: "/admin/submissions", n: c.awaitingReview, label: "versions waiting for review" },
+    { href: "/admin/submissions?status=building", n: c.building, label: "builds queued or running" },
+    { href: "/admin/text-changes", n: c.textChanges, label: "text changes waiting for review" },
+    { href: "/admin/reports", n: c.openReports, label: "open abuse reports" },
+    { href: "/admin/extensions", n: c.extensions, label: "listed extensions" },
+    { href: "/admin/authors", n: c.authors, label: "accounts" },
+  ];
   return (
     <div>
-      <div className="dx-work-head" style={{ marginBottom: 32 }}>
-        <div>
-          <h1 className="bw-h2">Overview</h1>
-          <p>What the directory holds today, and what is waiting for a reviewer.</p>
-        </div>
-      </div>
-
-      <div className="bw-note" style={{ marginBottom: 48 }}>
-        <p>
-          <b>
-            {pending === null
-              ? "Counting submissions…"
-              : pending === 0
-                ? "No submissions are waiting."
-                : `${pending} ${pending === 1 ? "submission is" : "submissions are"} waiting for review.`}
-          </b>{" "}
-          <Link href="/admin/submissions" className="bw-tlink">
-            Open the queue
-            <ArrowRight size={16} {...ICON} />
+      <h1 className="bw-h2">Overview</h1>
+      {c.unsigned ? <p className="bw-note bw-note-warning">{c.unsigned} published versions have no directory signature. The worker signs them when it has a signing key (SIGNING_KEY_FILE).</p> : null}
+      <div className="bw-tiles bw-tiles-3">
+        {tiles.map((t) => (
+          <Link key={t.href} href={t.href} className="bw-tile">
+            <span className="bw-tile-title">{t.n}</span>
+            <span className="bw-tile-text">{t.label}</span>
           </Link>
-        </p>
-      </div>
-
-      <div className="bw-facts">
-        <div>
-          <Puzzle size={24} {...ICON} />
-          <h2 className="bw-h3">{n(stats?.plugins)} plugins</h2>
-          <p>Of {n(stats?.extensions)} published extensions.</p>
-        </div>
-        <div>
-          <Palette size={24} {...ICON} />
-          <h2 className="bw-h3">{n(stats?.themes)} themes</h2>
-          <p>CSS only, no permissions.</p>
-        </div>
-        <div>
-          <Users size={24} {...ICON} />
-          <h2 className="bw-h3">{n(stats?.authors)} authors</h2>
-          <p>Signed in with GitHub.</p>
-        </div>
-        <div>
-          <Download size={24} {...ICON} />
-          <h2 className="bw-h3">{n(stats?.totalDownloads)} downloads</h2>
-          <p>Across every version.</p>
-        </div>
+        ))}
       </div>
     </div>
   );

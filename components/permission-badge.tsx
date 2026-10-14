@@ -1,55 +1,21 @@
 import { Eye, LayoutPanelTop, TriangleAlert, type LucideIcon } from "lucide-react";
 import { ICON } from "@/components/icon";
-
-const PERMISSION_DESCRIPTIONS: Record<string, string> = {
-  "email:read": "Read email and detect when messages are opened",
-  "email:write": "Change and delete email, and manage tags",
-  "email:send": "Send email as you",
-  "calendar:read": "Read calendar events",
-  "calendar:write": "Create and change calendar events",
-  "contacts:read": "Read contacts",
-  "contacts:write": "Create and change contacts",
-  "files:read": "Read files",
-  "files:write": "Create and change files",
-  "identity:read": "Read identity settings",
-  "identity:write": "Change identity settings",
-  "filters:read": "Read email filters",
-  "filters:write": "Create and change email filters",
-  "tasks:read": "Read tasks",
-  "tasks:write": "Create and change tasks",
-  "templates:read": "Read email templates",
-  "templates:write": "Create and change email templates",
-  "smime:read": "Read S/MIME certificates",
-  "vacation:read": "Read the vacation responder",
-  "vacation:write": "Change the vacation responder",
-  "settings:read": "Read application settings",
-  "security:read": "Read security settings",
-  "ui:toolbar": "Add toolbar buttons",
-  "ui:email-banner": "Show banners on messages",
-  "ui:email-footer": "Add content below messages",
-  "ui:composer-toolbar": "Add buttons to the composer",
-  "ui:sidebar-widget": "Add sidebar widgets",
-  "ui:settings-section": "Add a settings section",
-  "ui:context-menu": "Add context menu items",
-  "ui:navigation-rail": "Add navigation items",
-  "ui:keyboard": "Register keyboard shortcuts",
-  "auth:observe": "Observe sign-in and sign-out events",
-};
+import { HIGH_RISK_PERMISSIONS, IMPLICIT, permissionText } from "@/lib/webmail-compat";
 
 type Group = "act" | "read" | "ui";
 
-// The data has no risk levels, so the group follows from the permission's
-// name: anything under ui: adds to the interface, anything that reads or
-// observes is read access, and everything else can change things or send.
-// Permissions the directory has no description for still land in a group.
+// High-risk permissions (as the webmail's consent dialog marks them) are
+// listed first, under the warning colour; then read access; then additions
+// to the interface. Implicit permissions every plugin has are left out.
 function groupOf(permission: string): Group {
+  if (HIGH_RISK_PERMISSIONS.has(permission)) return "act";
   if (permission.startsWith("ui:")) return "ui";
   if (/(read|observe|lifecycle)$/.test(permission)) return "read";
   return "act";
 }
 
 const GROUPS: { key: Group; title: string; icon: LucideIcon }[] = [
-  { key: "act", title: "Can change things or send", icon: TriangleAlert },
+  { key: "act", title: "Needs your trust: reads or sends mail, or reaches other servers", icon: TriangleAlert },
   { key: "read", title: "Can read", icon: Eye },
   { key: "ui", title: "Adds to the interface", icon: LayoutPanelTop },
 ];
@@ -59,8 +25,9 @@ const GROUPS: { key: Group; title: string; icon: LucideIcon }[] = [
  * an icon and words; the change-or-send group takes the warning colour, never
  * the brand colour and never the error colour.
  */
-export function PermissionList({ permissions, isTheme = false }: { permissions: string[]; isTheme?: boolean }) {
-  if (!permissions || permissions.length === 0) {
+export function PermissionList({ permissions: all, isTheme = false }: { permissions: string[]; isTheme?: boolean }) {
+  const permissions = (all ?? []).filter((p) => !IMPLICIT.includes(p));
+  if (permissions.length === 0) {
     return (
       <p className="bw-help">
         {isTheme ? "No permissions. Themes change styles only." : "No special permissions."}
@@ -82,10 +49,10 @@ export function PermissionList({ permissions, isTheme = false }: { permissions: 
             <ul>
               {list.map((p) => (
                 <li key={p}>
-                  {PERMISSION_DESCRIPTIONS[p] ? (
-                    <span>{PERMISSION_DESCRIPTIONS[p]}</span>
+                  {permissionText(p) ? (
+                    <span title={permissionText(p)!.body}>{permissionText(p)!.title}</span>
                   ) : (
-                    <span className="dx-perm-undoc">No description in the directory yet</span>
+                    <span className="dx-perm-undoc">Not a permission this Bulwark version knows</span>
                   )}
                   <code className="bw-icode">{p}</code>
                 </li>

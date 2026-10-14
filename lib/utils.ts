@@ -63,32 +63,3 @@ export const ALLOWED_TAGS = [
   "developer-tools",
   "accessibility",
 ] as const;
-
-export const PERMISSION_CATEGORIES: Record<string, string[]> = {
-  Email: ["email:read", "email:write", "email:send"],
-  Calendar: ["calendar:read", "calendar:write"],
-  Contacts: ["contacts:read", "contacts:write"],
-  Files: ["files:read", "files:write"],
-  Identity: ["identity:read", "identity:write"],
-  Filters: ["filters:read", "filters:write"],
-  Tasks: ["tasks:read", "tasks:write"],
-  Templates: ["templates:read", "templates:write"],
-  "S/MIME": ["smime:read"],
-  Vacation: ["vacation:read", "vacation:write"],
-  Settings: ["settings:read"],
-  Security: ["security:read"],
-  UI: [
-    "ui:toolbar",
-    "ui:email-banner",
-    "ui:email-footer",
-    "ui:composer-toolbar",
-    "ui:sidebar-widget",
-    "ui:settings-section",
-    "ui:context-menu",
-    "ui:navigation-rail",
-    "ui:keyboard",
-  ],
-  Auth: ["auth:observe"],
-};
-
-export const ALL_PERMISSIONS = Object.values(PERMISSION_CATEGORIES).flat();
