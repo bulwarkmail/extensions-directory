@@ -22,5 +22,7 @@ in a GitHub Actions job with `permissions: id-token: write`, a trusted
 publisher (no token needed; pass `--subpath` for a monorepo instead of
 `--slug`). See [Publishing](https://extensions.bulwarkmail.org/publishing).
 
+Licensed under AGPL-3.0-only (see LICENSE and NOTICE).
+
 Every version is built by the directory from your repository and reviewed by
 a person before it is published.

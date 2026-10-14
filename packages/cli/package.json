@@ -2,13 +2,15 @@
   "name": "@bulwarkmail/extension-cli",
   "version": "1.0.0",
   "description": "Validate and publish Bulwark Webmail extensions to extensions.bulwarkmail.org",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "bin": {
     "extension-cli": "dist/cli.js"
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "engines": {
     "node": ">=20"
