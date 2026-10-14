@@ -6,6 +6,7 @@ import { extensions } from "@/lib/db/schema";
 import { getAdminSession, getAuthorSession } from "@/lib/auth";
 import { parseGitHubUrl, verifyRepoIsPublic } from "@/lib/github";
 import { jsonResponse, errorResponse } from "@/lib/utils";
+import { v1Detail } from "@/lib/v1/serialize";
 
 export async function GET(
   _request: NextRequest,
@@ -23,7 +24,7 @@ export async function GET(
       return errorResponse("Extension not found", 404);
     }
 
-    return jsonResponse({ data: extension });
+    return jsonResponse({ data: v1Detail(extension) });
   } catch (error) {
     console.error("Error fetching extension:", error);
     return errorResponse("Internal server error", 500);

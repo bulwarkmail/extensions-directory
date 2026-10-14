@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getExtensions } from "@/lib/db/queries";
 import { jsonResponse, errorResponse } from "@/lib/utils";
+import { v1ListItem } from "@/lib/v1/serialize";
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
       perPage: parseInt(searchParams.get("perPage") || "24", 10),
     });
 
-    return jsonResponse(result);
+    return jsonResponse({ ...result, data: result.data.map((e) => v1ListItem(e, true)) });
   } catch (error) {
     console.error("Error fetching extensions:", error);
     return errorResponse("Internal server error", 500);

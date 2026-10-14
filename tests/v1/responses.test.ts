@@ -53,6 +53,25 @@ describe("GET /api/v1/extension/{slug}", () => {
   });
 });
 
+describe("private data", () => {
+  it("never appears in public responses", async () => {
+    const bodies = await Promise.all([
+      list.GET(req("/api/v1/extensions")),
+      detail.GET(req("/api/v1/extension/jitsi-meet"), params({ slug: "jitsi-meet" })),
+      detail.GET(req("/api/v1/extension/nord"), params({ slug: "nord" })),
+      featured.GET(),
+      popular.GET(),
+      recent.GET(),
+    ].map(async (r) => (await r).text()));
+    for (const body of bodies) {
+      expect(body).not.toContain("@example.com");
+      expect(body).not.toContain("looks fine");
+      expect(body).not.toContain("admin-1");
+      expect(body).not.toContain("findings");
+    }
+  });
+});
+
 describe("lists and stats", () => {
   it.each([
     ["featured", featured.GET],
