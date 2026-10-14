@@ -1152,10 +1152,60 @@ and start, and is committed in your style. Nothing pushed, nothing deployed.
   because this checkout has someone else's uncommitted `package.json`
   change.
 
-## 19. Still open
+## 19. Built (2026-10-14)
 
-1. **Build VM creation.** Creating the VM on Proxmox, its firewall rules
-   and the SSH key pair is infrastructure work. I'll write the provisioning
-   script in phase 3 and ask before running anything on Proxmox.
-2. **Mail account.** Creating `noreply@bulwarkmail.org` on Stalwart happens
-   in phase 9; I'll ask before creating it.
+All ten phases are on the branch `rework`. Where the build differs from the
+plan above, this list wins.
+
+- **Routing.** `/api/v2` is one catch-all route (`app/api/v2/[...path]`)
+  dispatching to a table (`lib/api/v2.ts`); `/publish`, `/publish/dry-run`
+  and `/submissions/{id}` have their own route files.
+- **Bundles the author built are never used.** With a `build` script the
+  directory builds; without one, the plain files are the bundle. A committed
+  `dist/` or `<slug>.zip` without a build script is refused. All official
+  plugins in bulwarkmail/plugins have build scripts, so they keep working.
+  Docs and source maps (README, LICENSE, `*.md`, `*.map`) are left out of
+  bundles, and so are the marketplace images named in the manifest.
+- **Webmail checks are the webmail's code.** `lib/webmail-compat/vendor` is a
+  verbatim copy of the webmail's package reader and its imports (9 files),
+  made by `scripts/sync-webmail-compat.mjs`. Running it on production showed
+  6 of 39 published bundles that current webmails refuse: subway-surfers
+  1.0.0 to 1.2.1 (README.md in the bundle), openpgp 1.1.0 and 1.1.6 (settings
+  schema), pgp-true-end-to-end 2.0.0 (settings schema default). They stay
+  published; their next versions must pass.
+- **Publishing moves to the worker.** Approval sets `publishing`; the worker
+  signs, stores and inserts the version, so only the worker reads the
+  signing key.
+- **Images are WebP** (icons PNG), content-hashed under `media/`; old raw
+  paths answer 404.
+- **Changelog and all public text edits** wait for review (`text_changes`).
+- **Webhooks** were built with email (HMAC-signed, SSRF-guarded).
+- **CLI and Action share one client** (`packages/cli/src/client.ts`). The
+  Action is prepared under `action/` (with a committed `dist/`) for the
+  separate repository `bulwarkmail/publish-extension`.
+- **Keys.** Root key `bfcd5e1fcf810a7d` and online key `c7fa1217ac0826ce` are
+  in the vault (collection Agent, with their public keys and where they are
+  used). `deploy/keyring.json` is the first keyring.
+- **Webmail.** Branch `feat/directory-signatures` in the webmail repository
+  (not pushed) does item 1 and 2 of section 12: signature check on install
+  and preview with the root key pinned, `appVersion` and `channel` sent to
+  the directory, new settings `extensionDirectoryRootKeys` and
+  `extensionDirectoryChannel`. Items 3 to 6 (showing yanked, deprecated and
+  advisory notices from `/api/v2/updates`, ratings UI, moving to v2 routes)
+  are still to do in the webmail.
+- **Tests.** 203 in the directory, plus 11 in the webmail branch. The
+  migration was run on a copy of production (14 extensions, 39 versions,
+  14,903 downloads): no counts changed, all bundle hashes match, 23 images
+  converted, and the v1 answers differ from production only in image
+  paths, null emails and null scan reports.
+
+## 20. Still open
+
+1. **Server setup** (`deploy/server-setup.sh`), the build VM's setup
+   (`deploy/build-vm/setup.sh`) and its nightly rollback, the signing key on
+   the server, the keyring import, the `noreply@bulwarkmail.org` mailbox and
+   the nginx rate limit need someone with access to mail.rath.li and the
+   Proxmox host. The VM itself exists: VM 111 `extbuild`, 10.10.10.67.
+2. **The Action's repository** `bulwarkmail/publish-extension` (copy
+   `action/`, tag `v1`) and publishing `@bulwarkmail/extension-cli` to npm.
+3. **Webmail follow-ups**: section 12 items 3 to 6.
