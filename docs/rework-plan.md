@@ -1199,13 +1199,38 @@ plan above, this list wins.
   converted, and the v1 answers differ from production only in image
   paths, null emails and null scan reports.
 
-## 20. Still open
+## 20. Deployed (2026-10-14)
 
-1. **Server setup** (`deploy/server-setup.sh`), the build VM's setup
-   (`deploy/build-vm/setup.sh`) and its nightly rollback, the signing key on
-   the server, the keyring import, the `noreply@bulwarkmail.org` mailbox and
-   the nginx rate limit need someone with access to mail.rath.li and the
-   Proxmox host. The VM itself exists: VM 111 `extbuild`, 10.10.10.67.
-2. **The Action's repository** `bulwarkmail/publish-extension` (copy
-   `action/`, tag `v1`) and publishing `@bulwarkmail/extension-cli` to npm.
-3. **Webmail follow-ups**: section 12 items 3 to 6.
+- mail.rath.li: `deploy/server-setup.sh` ran; the web app runs as
+  `extdir-web`, the worker as `extdir-worker`; nginx limits
+  `/api/v2/publish*` and reports (`/etc/nginx/conf.d/extdir-ratelimit.conf`,
+  vhost backup `*.bak-2026-10-14-ratelimit`).
+- Build VM 111 `extbuild` (10.10.10.67) set up with `deploy/build-vm/setup.sh`,
+  snapshot `clean`, rolled back nightly at 04:15 by
+  `/etc/cron.d/extbuild-rollback` on the Proxmox host. A real build of
+  jitsi-meet over the worker's SSH key took 5 s; containers reach only the
+  npm registry, and nothing during `npm run build`.
+- The migration ran in the deploy: 23 images converted, 0 problems; the
+  worker signed all 39 versions with key `c7fa1217ac0826ce`; the keyring is
+  served at `/api/v2/keys` and `/.well-known/bulwark-extension-keys.json`.
+  The webmail's verifier accepts live bundles and refuses tampered ones.
+- `bulwarkmail/publish-extension` is public with tags `v1` and `v1.0.0`. Its
+  self-test workflow sends a real OIDC token to production: the token is
+  verified and refused only for having no trusted publisher.
+- The webmail change is on its `main` (15edc5943).
+
+## 21. Still open
+
+1. **Mail.** Stalwart's license is at its 50-account limit, so
+   `noreply@bulwarkmail.org` could not be created. Notifications queue up
+   (nothing is lost) until `SMTP_HOST`, `SMTP_USER` and `SMTP_PASSWORD` are
+   set in `.env`. The vault item "Bulwark Extensions – noreply@bulwarkmail.org"
+   holds a generated password for the account once a seat is free.
+2. **A first real publish** needs a person: sign in, add a trusted publisher
+   on an extension, push a tag. Everything up to that point is tested.
+3. **npm**: `@bulwarkmail/extension-cli` is not published (no npm account
+   in the vault). Until then the docs' `npx` commands don't work; the CLI
+   runs from `packages/cli` after `npm run build:cli`.
+4. **Webmail follow-ups**: section 12 items 3 to 6 (notices from
+   `/api/v2/updates`, ratings UI, moving to v2 routes).
+5. **Six published bundles** fail current webmail install checks (section 19).
