@@ -66,6 +66,8 @@ export function setTransport(t: Transporter | null): void {
 }
 
 export async function sendPending(limit = 20): Promise<number> {
+  // Without SMTP nothing is sent or marked: the queue waits until it is set up.
+  if (!getTransport()) return 0;
   const rows = await db
     .select({ n: notifications, email: authors.email, notifyEmail: authors.notifyEmail, banned: authors.banned })
     .from(notifications)
