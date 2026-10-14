@@ -1,0 +1,61 @@
+// Copies the webmail's package validator into lib/webmail-compat/vendor, so
+// the directory accepts exactly what a webmail would install, and the
+// permission texts the webmail shows, so the directory shows the same ones.
+//
+//   node scripts/sync-webmail-compat.mjs <path to the webmail checkout>
+//
+// The copied files are not edited by hand; run this again after the
+// webmail changes them. Only import paths are rewritten (@/lib/x -> ./x).
+import fs from "fs";
+import path from "path";
+import { execFileSync } from "child_process";
+
+const webmail = path.resolve(process.argv[2] ?? "../..");
+const out = path.resolve(import.meta.dirname, "..", "lib", "webmail-compat", "vendor");
+const ENTRY = "lib/extension-package.ts";
+
+function resolveImport(from, spec) {
+  let base;
+  if (spec.startsWith("@/")) base = path.join(webmail, spec.slice(2));
+  else if (spec.startsWith(".")) base = path.join(path.dirname(from), spec);
+  else return null;
+  for (const ext of [".ts", "/index.ts"]) {
+    if (fs.existsSync(base + ext)) return path.normalize(base + ext);
+  }
+  throw new Error(`cannot resolve ${spec} from ${from}`);
+}
+
+const files = new Map(); // absolute source -> path relative to webmail lib/
+function walk(file) {
+  if (files.has(file)) return;
+  const rel = path.relative(path.join(webmail, "lib"), file);
+  if (rel.startsWith("..")) throw new Error(`${file} is outside lib/`);
+  files.set(file, rel);
+  const src = fs.readFileSync(file, "utf8");
+  for (const m of src.matchAll(/(?:import|export)\s[^;]*?from\s+["']([^"']+)["']/g)) {
+    const target = resolveImport(file, m[1]);
+    if (target) walk(target);
+  }
+}
+walk(path.join(webmail, ENTRY));
+
+const commit = execFileSync("git", ["-C", webmail, "rev-parse", "--short", "HEAD"]).toString().trim();
+fs.rmSync(out, { recursive: true, force: true });
+for (const [abs, rel] of files) {
+  let src = fs.readFileSync(abs, "utf8");
+  src = src.replace(/(from\s+["'])@\/lib\/([^"']+)(["'])/g, (_m, a, target, z) => {
+    let r = path.relative(path.dirname(rel), target).replace(/\\/g, "/");
+    if (!r.startsWith(".")) r = `./${r}`;
+    return `${a}${r}${z}`;
+  });
+  const dest = path.join(out, rel);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, `// Copied from the webmail (bulwarkmail/webmail ${commit}, lib/${rel.replace(/\\/g, "/")})\n// by scripts/sync-webmail-compat.mjs. Do not edit; sync again instead.\n// @ts-nocheck\n/* eslint-disable */\n${src}`);
+}
+
+// Permission titles and descriptions as the webmail's consent dialog shows them.
+const common = JSON.parse(fs.readFileSync(path.join(webmail, "locales", "en", "common.json"), "utf8"));
+const perms = common?.plugins?.permissions ?? {};
+fs.writeFileSync(path.join(out, "permission-texts.json"), JSON.stringify(perms, null, 2) + "\n");
+fs.writeFileSync(path.join(out, "SOURCE"), `bulwarkmail/webmail ${commit}\n`);
+console.log(`synced ${files.size} files and ${Object.keys(perms).length} permission texts from ${commit}`);

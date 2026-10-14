@@ -1,0 +1,260 @@
+{
+  "none": "It needs no special permissions.",
+  "high_risk": "Needs care",
+  "email_read": {
+    "title": "Read your email",
+    "body": "See senders, recipients, subjects and the full text of any message in your account, and your folders."
+  },
+  "email_write": {
+    "title": "Change and organise your email",
+    "body": "Add or remove tags, flags and other keywords on your messages, move them between your folders and to the archive, and save drafts."
+  },
+  "email_send": {
+    "title": "Change mail before it is sent",
+    "body": "Read and change the recipients, subject, text and attachments of messages you write, and stop a message from being sent."
+  },
+  "crypto_full": {
+    "title": "Full access to this app",
+    "body": "Runs with the same rights as the webmail itself. It can read all your mail and stored keys and act for you. Only allow this for plugins you fully trust."
+  },
+  "email_raw_send": {
+    "title": "Send messages it built itself",
+    "body": "Send complete messages, for example signed or encrypted ones, from your account."
+  },
+  "email_blob_read": {
+    "title": "Read the raw content of messages",
+    "body": "Read attachments and the full source of messages you act on, and every file you attach before it is sent."
+  },
+  "email_blob_write": {
+    "title": "Replace attachments before sending",
+    "body": "Upload files to your mail server and replace a file you attached with another one before the message is sent."
+  },
+  "email_render_takeover": {
+    "title": "Change how messages are shown",
+    "body": "Replace the text of messages you open and of the message list, for example to show decrypted content."
+  },
+  "calendar_read": {
+    "title": "Read your calendar",
+    "body": "See your calendars and their events."
+  },
+  "calendar_write": {
+    "title": "Change your calendar",
+    "body": "Create, change and delete events."
+  },
+  "contacts_read": {
+    "title": "Read your contacts",
+    "body": "Search and read your address books."
+  },
+  "contacts_write": {
+    "title": "Change your contacts",
+    "body": "Create, change and delete contacts and address books."
+  },
+  "files_read": {
+    "title": "Read your files",
+    "body": "Browse and open the files stored in your account."
+  },
+  "files_write": {
+    "title": "Change your files",
+    "body": "Upload, rename, move and delete files in your account."
+  },
+  "identity_read": {
+    "title": "See your sender addresses",
+    "body": "See the addresses you send from and their signatures."
+  },
+  "identity_write": {
+    "title": "Change your sender addresses",
+    "body": "Create, change and delete sender addresses and signatures."
+  },
+  "filters_read": {
+    "title": "Read your mail filters",
+    "body": "See the rules that sort your incoming mail."
+  },
+  "filters_write": {
+    "title": "Change your mail filters",
+    "body": "Add rules to your server-side filters. Such rules can move, forward or delete incoming mail."
+  },
+  "tasks_read": {
+    "title": "Read your tasks",
+    "body": "See your task lists and tasks."
+  },
+  "tasks_write": {
+    "title": "Change your tasks",
+    "body": "Create, change, complete and delete tasks."
+  },
+  "templates_read": {
+    "title": "Read your templates",
+    "body": "See your saved message templates."
+  },
+  "templates_write": {
+    "title": "Change your templates",
+    "body": "Create, change and delete message templates."
+  },
+  "smime_read": {
+    "title": "See your S/MIME status",
+    "body": "See whether you have S/MIME keys and certificates, without access to the keys."
+  },
+  "vacation_read": {
+    "title": "See your out-of-office reply",
+    "body": "See whether your automatic reply is on and what it says."
+  },
+  "vacation_write": {
+    "title": "Change your out-of-office reply",
+    "body": "Turn your automatic reply on or off and change its text and dates."
+  },
+  "settings_read": {
+    "title": "Read your settings",
+    "body": "See your preferences and tag definitions."
+  },
+  "settings_write": {
+    "title": "Change your settings",
+    "body": "Add and reorder tags and change your preferences."
+  },
+  "security_read": {
+    "title": "See your account security",
+    "body": "See whether two-factor sign-in and encryption are on, without access to secrets."
+  },
+  "auth_observe": {
+    "title": "Know when you sign in",
+    "body": "Be told when you sign in, switch accounts or your session is renewed."
+  },
+  "auth_emit": {
+    "title": "Sign you out",
+    "body": "Sign you out of the webmail."
+  },
+  "account_read": {
+    "title": "See your accounts",
+    "body": "See the accounts you added, with their addresses and servers."
+  },
+  "http_post": {
+    "title": "Use the webmail server for you",
+    "body": "Call these server endpoints with your login:"
+  },
+  "http_fetch": {
+    "title": "Connect to other websites",
+    "body": "Send requests to these sites. Anything the plugin can read may be sent there:"
+  },
+  "admin_config": {
+    "title": "Read its settings from your administrator",
+    "body": "Read the settings your administrator saved for this plugin."
+  },
+  "ui_observe": {
+    "title": "Follow where you are in the app",
+    "body": "Know which page is open and react to links you click."
+  },
+  "ui_toolbar": {
+    "title": "Add buttons to toolbars",
+    "body": "Show its own buttons in the message toolbar, on an open message and in the top bar."
+  },
+  "ui_app_top_banner": {
+    "title": "Show a banner at the top",
+    "body": "Show a notice across the top of the app."
+  },
+  "ui_email_banner": {
+    "title": "Show notices on messages",
+    "body": "Show its own notices and summaries above, inside and between the parts of an open message or conversation."
+  },
+  "ui_email_footer": {
+    "title": "Add content below messages",
+    "body": "Show its own content under an open message."
+  },
+  "ui_contact_cryptokeys": {
+    "title": "Show encryption keys of contacts",
+    "body": "Show and manage the encryption keys on a contact."
+  },
+  "ui_email_details": {
+    "title": "Add panels to message details",
+    "body": "Show its own panel next to or below an open message."
+  },
+  "ui_download_file": {
+    "title": "Save files to your device",
+    "body": "Offer files it created for download."
+  },
+  "ui_message_list_tabs": {
+    "title": "Add tabs to your inbox",
+    "body": "Sort your inbox into tabs such as Updates or Promotions."
+  },
+  "ui_composer_toolbar": {
+    "title": "Add to the composer",
+    "body": "Show its own buttons, menu entries and sections while you write a message."
+  },
+  "ui_composer_sidebar": {
+    "title": "Add a panel to the composer",
+    "body": "Show its own panel next to the message you write."
+  },
+  "ui_sidebar_widget": {
+    "title": "Add to the sidebar",
+    "body": "Show its own boxes and sections in the mail sidebar."
+  },
+  "ui_settings_section": {
+    "title": "Add a settings page",
+    "body": "Show its own page in Settings."
+  },
+  "ui_context_menu": {
+    "title": "Add to the message menu",
+    "body": "Add entries to the menu that opens when you right-click a message."
+  },
+  "ui_navigation_rail": {
+    "title": "Add to the navigation bar",
+    "body": "Show its own button in the navigation bar."
+  },
+  "ui_keyboard": {
+    "title": "Add keyboard shortcuts",
+    "body": "React to keyboard shortcuts it defines."
+  },
+  "ui_calendar_action": {
+    "title": "Add to the calendar",
+    "body": "Show its own buttons and sections on events, and short labels and dots on calendar days."
+  },
+  "ui_admin_page": {
+    "title": "Add an admin page",
+    "body": "Show its own page in the admin settings."
+  },
+  "app_lifecycle": {
+    "title": "Know when the app starts and stops",
+    "body": "Be told when the app starts, goes offline or you sign out."
+  },
+  "ui_message_list": {
+    "title": "Add to the message list",
+    "body": "Show its own content above the message list, and buttons on messages and in the selection toolbar."
+  },
+  "ui_contacts": {
+    "title": "Add to contacts",
+    "body": "Show its own sections in a contact's details and buttons in the contact list."
+  },
+  "ui_tasks": {
+    "title": "Add to tasks",
+    "body": "Show its own sections in a task's details and buttons in the task list."
+  },
+  "ui_files": {
+    "title": "Add to files",
+    "body": "Show its own sections in the file preview and entries in a file's menu."
+  },
+  "ui_commands": {
+    "title": "Add commands",
+    "body": "Add its own entries to the command palette (Ctrl+K)."
+  },
+  "ui_app_page": {
+    "title": "Add pages",
+    "body": "Add its own pages to the app, each with a button in the navigation bar."
+  },
+  "http_proxy": {
+    "title": "Use accounts you connect",
+    "body": "Send requests through Bulwark's server with an account or key that you or your administrator set up. The plugin never sees the password, but it can do anything that account can do on its own server."
+  },
+  "compose_open": {
+    "title": "Open the composer for you",
+    "body": "Open a new message with recipients, text or attachments filled in. You still decide whether to send it."
+  },
+  "compose_read": {
+    "title": "Read the message you are writing",
+    "body": "Read the text of a message while you write it, when you use the plugin in the composer. Not the signature or the quoted message."
+  },
+  "compose_write": {
+    "title": "Change the message you are writing",
+    "body": "Replace or add text in a message while you write it, when you use the plugin in the composer. You can undo each change, and you still decide whether to send."
+  },
+  "ui_notifications": {
+    "title": "Show notifications",
+    "body": "Show notifications on your device, or in the app if you haven't allowed them. Each one names the plugin."
+  }
+}
