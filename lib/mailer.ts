@@ -36,6 +36,8 @@ export function renderMessage(kind: string, p: Payload): { subject: string; text
       return { subject: `${p.slug} was released`, text: `No version of "${p.slug}" was published within 90 days, so the name was released.\n` };
     case "token.revoked":
       return { subject: `API token "${p.name}" was revoked`, text: `The API token "${p.name}" (${p.prefix}…) was revoked${p.reason ? `: ${p.reason}` : ""}.\n\n${SITE()}/dashboard/tokens\n` };
+    case "report.malware":
+      return { subject: `Malware report: ${p.slug}`, text: `Someone reported ${p.slug} as malware:\n\n${p.details}\n\n${SITE()}/admin/reports\n` };
     case "advisory.published":
       return { subject: `Security advisory for ${name}`, text: `${p.id}: ${p.summary}\n\n${SITE()}/extension/${p.slug}\n` };
     default:

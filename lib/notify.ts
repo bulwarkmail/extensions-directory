@@ -14,7 +14,8 @@ export type NotificationKind =
   | "reservation.expiring"
   | "reservation.released"
   | "token.revoked"
-  | "advisory.published";
+  | "advisory.published"
+  | "report.malware";
 
 export async function queueNotification(authorId: string, kind: NotificationKind, payload: Record<string, unknown>): Promise<void> {
   await db.insert(notifications).values({ authorId, kind, payload });
