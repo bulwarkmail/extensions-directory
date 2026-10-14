@@ -108,9 +108,12 @@ jobs:
           mkdir -p "$work/uploads" && tar -xzf release.tgz -C "$work"
           export DATABASE_PATH="$RUNNER_TEMP/smoke.db" UPLOADS_DIR="$work/uploads" PORT=3100 HOSTNAME=127.0.0.1 NODE_ENV=production
           (cd "$work" && node deploy/migrate.cjs)
+          # The worker loads its native modules from the release and keeps running.
+          (cd "$work" && SANDBOX_RUNNER=off STAGING_DIR="$RUNNER_TEMP/staging" timeout 8 node deploy/dist/worker.cjs > "$RUNNER_TEMP/worker.log" 2>&1) || [ $? -eq 124 ] || { cat "$RUNNER_TEMP/worker.log"; exit 1; }
+          grep -q "worker: started" "$RUNNER_TEMP/worker.log"
           (cd "$work" && node server.js > "$RUNNER_TEMP/server.log" 2>&1 &)
           for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:3100/api/v1/stats && break; sleep 1; done
-          for path in / /plugins /themes /search /submit /api/v1/stats /this-page-does-not-exist; do
+          for path in / /plugins /themes /search /publishing /dashboard /api/v1/stats /api/v1/extensions /api/v2/extensions /api/v2/permissions /this-page-does-not-exist; do
             code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3100${path}")
             echo "$path $code"
             if [ "$path" = /this-page-does-not-exist ]; then [ "$code" = 404 ]; else [ "$code" = 200 ]; fi

@@ -3,6 +3,9 @@
 // (deploy/ecosystem.config.cjs). Stops cleanly on SIGTERM/SIGINT.
 import { startWorker } from "../lib/worker";
 
+// Same as the web app (instrumentation.ts): files stay group-writable.
+process.umask(0o007);
+
 const stop = new AbortController();
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => stop.abort());
 console.log(`worker: started (runner ${process.env.SANDBOX_RUNNER || "local"})`);

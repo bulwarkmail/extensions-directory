@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# The only thing the directory's worker can run on the build VM: the forced
+# command of its SSH key (deploy/build-vm/setup.sh installs it as
+# /usr/local/bin/extbuild). One build per call:
+#
+#   stdin   the extension's source as a tar
+#   stdout  the tree after the build as a tar (no node_modules)
+#   stderr  "image <ref>" on the first line, then the build log
+#   exit    0 built, 10 install failed, 11 build failed, 12 timed out,
+#           13 output too large, 20 bad input
+#
+# npm ci --ignore-scripts runs with network, but containers can only reach
+# the local proxy, which only lets registry.npmjs.org through. npm run build
+# runs with no network at all.
+set -uo pipefail
+
+[[ "${SSH_ORIGINAL_COMMAND:-}" == "build" ]] || { echo "usage: build" >&2; exit 2; }
+
+IMAGE=$(cat /etc/extbuild/image)
+PROXY=http://172.17.0.1:8888
+MAX_IN=$((70 * 1024 * 1024))
+MAX_OUT_KB=$((200 * 1024))
+
+mkdir -p /var/lib/extbuild
+W=$(mktemp -d /var/lib/extbuild/job-XXXXXXXX)
+cleanup() {
+  docker rm -f "extbuild-${W##*-}-i" "extbuild-${W##*-}-b" >/dev/null 2>&1
+  rm -rf "$W"
+}
+trap cleanup EXIT
+
+echo "image $IMAGE" >&2
+
+# Untrusted input: capped in size, no owners or modes kept, nothing outside $W.
+head -c "$MAX_IN" | tar -x -C "$W" --no-same-owner --no-same-permissions --no-overwrite-dir 2>/dev/null \
+  || { echo "The source archive could not be read" >&2; exit 20; }
+find "$W" -type l -delete
+chmod -R a+rwX "$W"
+
+run() { # timeout network name extra-args command
+  timeout --kill-after=10 "$1" docker run --rm --name "$3" --network "$2" \
+    --memory 1g --memory-swap 1g --cpus 1 --pids-limit 512 \
+    --cap-drop ALL --security-opt no-new-privileges --read-only \
+    --tmpfs /tmp:rw,noexec,size=64m --user 1000:1000 \
+    -v "$W:/build" -w /build -e HOME=/build -e npm_config_cache=/build/.npm-cache -e CI=true \
+    $4 "$IMAGE" sh -c "$5" >&2
+}
+
+if [[ -f "$W/package-lock.json" ]]; then
+  INSTALL="npm ci --ignore-scripts --no-audit --no-fund"
+else
+  INSTALL="npm install --ignore-scripts --no-audit --no-fund"
+fi
+echo "\$ $INSTALL" >&2
+run 300 bridge "extbuild-${W##*-}-i" \
+  "-e HTTPS_PROXY=$PROXY -e HTTP_PROXY=$PROXY -e npm_config_proxy=$PROXY -e npm_config_https_proxy=$PROXY" "$INSTALL"
+rc=$?
+[[ $rc -eq 124 || $rc -eq 137 ]] && exit 12
+[[ $rc -ne 0 ]] && exit 10
+
+echo '$ npm run build' >&2
+run 300 none "extbuild-${W##*-}-b" "" "npm run build"
+rc=$?
+[[ $rc -eq 124 || $rc -eq 137 ]] && exit 12
+[[ $rc -ne 0 ]] && exit 11
+
+find "$W" -type l -delete
+size=$(du -sk --exclude=node_modules --exclude=.npm-cache "$W" | cut -f1)
+[[ $size -gt $MAX_OUT_KB ]] && { echo "Build output is larger than 200 MB" >&2; exit 13; }
+tar -C "$W" --exclude=./node_modules --exclude=./.npm-cache -cf - .
