@@ -6,6 +6,7 @@ import { PermissionList } from "@/components/permission-badge";
 import { ExtIcon, formatTypeLabel } from "@/components/ext-icon";
 import { ICON } from "@/components/icon";
 import { formatDownloads, formatDate, formatBytes, timeAgo } from "@/lib/utils";
+import { renderMarkdown } from "@/lib/markdown";
 import type { Metadata } from "next";
 
 interface Props {
@@ -130,7 +131,7 @@ export default async function ExtensionDetailPage({ params }: Props) {
             {extension.longDescription ? (
               <section>
                 <h2 className="dx-h2">About</h2>
-                <div className="ext-prose" dangerouslySetInnerHTML={{ __html: extension.longDescription }} />
+                <div className="ext-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(extension.longDescription) }} />
               </section>
             ) : null}
 
