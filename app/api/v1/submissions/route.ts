@@ -13,7 +13,7 @@ import {
 import { fetchManifest, resolveBundle, validateManifest } from "@/lib/manifest";
 import { scanBundle } from "@/lib/scanner";
 import { db } from "@/lib/db/client";
-import { submissions, extensions } from "@/lib/db/schema";
+import { submissions, extensions, authors } from "@/lib/db/schema";
 import { jsonResponse, errorResponse } from "@/lib/utils";
 import { trackServerEvent } from "@/lib/umami";
 
@@ -30,6 +30,15 @@ export async function POST(request: NextRequest) {
   try {
     const session = await requireAuthorSession();
     const authorId = session.authorId!;
+
+    const [author] = await db
+      .select({ banned: authors.banned })
+      .from(authors)
+      .where(eq(authors.id, authorId))
+      .limit(1);
+    if (!author || author.banned) {
+      return errorResponse("This account can't submit extensions", 403);
+    }
 
     const body = (await request.json().catch(() => null)) as
       | {
@@ -159,10 +168,19 @@ export async function POST(request: NextRequest) {
     // Look up existing extension by slug from manifest (more reliable than repo
     // for monorepos where one repo hosts many slugs).
     const [existingExt] = await db
-      .select({ id: extensions.id, type: extensions.type })
+      .select({ id: extensions.id, type: extensions.type, authorId: extensions.authorId })
       .from(extensions)
       .where(eq(extensions.slug, manifest.slug))
       .limit(1);
+
+    // Approval would publish this under the existing extension and point it
+    // at the submitter's repository, so only the owner may submit to a slug.
+    if (existingExt && existingExt.authorId !== authorId) {
+      return errorResponse(
+        `"${manifest.slug}" belongs to another author. Use a different id in manifest.json.`,
+        403
+      );
+    }
 
     // Cross-check: if the slug exists, type must match the new manifest's type
     if (existingExt && existingExt.type !== manifest.type) {

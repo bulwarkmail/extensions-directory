@@ -7,6 +7,7 @@ import {
   submissions,
   extensions,
   extensionVersions,
+  authors,
 } from "@/lib/db/schema";
 import { jsonResponse, errorResponse } from "@/lib/utils";
 import { trackServerEvent } from "@/lib/umami";
@@ -164,6 +165,32 @@ export async function POST(request: NextRequest) {
       );
     }
     const manifest = validation.manifest;
+
+    // Submissions made before the ownership check could target someone
+    // else's extension; never publish those under it.
+    const [target] = await db
+      .select({ authorId: extensions.authorId })
+      .from(extensions)
+      .where(
+        submission.extensionId
+          ? eq(extensions.id, submission.extensionId)
+          : eq(extensions.slug, manifest.slug)
+      )
+      .limit(1);
+    if (target && target.authorId !== submission.authorId) {
+      return errorResponse(
+        `"${manifest.slug}" belongs to another author; reject this submission`,
+        409
+      );
+    }
+    const [submitter] = await db
+      .select({ banned: authors.banned })
+      .from(authors)
+      .where(eq(authors.id, submission.authorId))
+      .limit(1);
+    if (!submitter || submitter.banned) {
+      return errorResponse("The submitting author is banned; reject this submission", 409);
+    }
 
     let bundleInfo;
     try {
