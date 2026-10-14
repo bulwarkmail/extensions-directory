@@ -9,6 +9,7 @@ import {
   authors,
   directoryAdmins,
   downloadStats,
+  extensionMembers,
   extensions,
   extensionVersions,
   screenshots,
@@ -211,6 +212,12 @@ export async function seed() {
   ]);
   await addVersion({ id: "ver-evil-010", extensionId: "ext-evil", slug: "evil", version: "0.1.0", manifest: { id: "evil", name: "Evil", version: "0.1.0", author: "Bob", description: "Pulled", type: "hook", entrypoint: "index.js" }, files: { "index.js": "steal()\n" }, createdAt: "2026-01-05T10:00:00Z" });
 
+  await db.insert(extensionMembers).values([
+    { extensionId: "ext-jitsi", authorId: "author-alice", role: "owner" },
+    { extensionId: "ext-nord", authorId: "author-bob", role: "owner" },
+    { extensionId: "ext-draft", authorId: "author-bob", role: "owner" },
+    { extensionId: "ext-evil", authorId: "author-bob", role: "owner" },
+  ]);
   await db.insert(downloadStats).values([
     { id: "dl-1", extensionId: "ext-jitsi", versionId: "ver-jitsi-100", downloadedAt: T("2026-02-02T10:00:00Z"), userAgent: "node", ipHash: "aaaa" },
     { id: "dl-2", extensionId: "ext-jitsi", versionId: "ver-jitsi-1100", downloadedAt: T("2026-02-16T10:00:00Z"), userAgent: "node", ipHash: "bbbb" },

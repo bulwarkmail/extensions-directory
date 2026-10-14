@@ -1,5 +1,6 @@
 // 0003_publishing applied to a database in the pre-rework shape (0000-0002),
 // then the post-migrate data steps.
+import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -41,7 +42,7 @@ beforeAll(() => {
   for (const [id, v, at] of [["v1", "1.0.0", 100], ["v2", "1.10.0", 200], ["v3", "1.9.0", 300], ["v4", "2.0.0-beta.1", 400]] as const) {
     fs.mkdirSync(path.join(uploads, "bundles/tool", v), { recursive: true });
     fs.writeFileSync(path.join(uploads, `bundles/tool/${v}/tool-${v}.zip`), `zip ${v}`);
-    const sha = require("crypto").createHash("sha256").update(`zip ${v}`).digest("hex");
+    const sha = crypto.createHash("sha256").update(`zip ${v}`).digest("hex");
     run("insert into extension_versions (id, extension_id, version, changelog, bundle_path, bundle_sha256, bundle_size, manifest, review_status, reviewer_id, created_at, permissions, min_app_version) values (?, 'e1', ?, ?, ?, ?, 5, '{}', 'approved', 'd1', ?, ?, ?)",
       id, v, v === "1.0.0" ? null : "notes", `bundles/tool/${v}/tool-${v}.zip`, sha, at, JSON.stringify([`perm:${v}`]), `1.${at / 100}.0`);
     run("insert into submissions (id, extension_id, version_id, author_id, type, github_repo, github_tag, subpath, manifest_snapshot, status, submitted_at, reviewer_id) values (?, 'e1', ?, 'a1', 'new_version', 'alice/tool', ?, 'sub', ?, 'approved', ?, 'd1')",

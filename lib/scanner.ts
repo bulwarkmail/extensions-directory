@@ -1,4 +1,8 @@
-import type { NormalizedManifest, ResolvedBundle } from "./manifest";
+import type { NormalizedManifest } from "./manifest";
+
+interface ResolvedBundle {
+  files: Map<string, Uint8Array>;
+}
 
 export type Severity = "block" | "warn" | "info";
 

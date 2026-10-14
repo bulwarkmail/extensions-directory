@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "deploy/dist/**",
+    // Verbatim copies of webmail files (scripts/sync-webmail-compat.mjs).
+    "lib/webmail-compat/vendor/**",
   ]),
   // Node scripts run outside Next as CommonJS, so require() is expected.
   {
