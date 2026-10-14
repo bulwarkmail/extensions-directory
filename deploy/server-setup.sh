@@ -69,6 +69,7 @@ add_env SANDBOX_SSH_HOST "extbuild@$BUILD_VM"
 add_env SANDBOX_SSH_KEY "$BASE/keys/buildvm_ed25519"
 add_env SANDBOX_SSH_KNOWN_HOSTS "$BASE/keys/buildvm_known_hosts"
 add_env SIGNING_KEY_FILE "$BASE/keys/signing.pem"
+add_env EXTENSIONS_ROOT_KEYS SyGlNKHBY4T7Z7BmDP80G8Eh58yn6W32SpKUHpRzHk4=
 add_env MAIL_FROM '"Bulwark Extensions <noreply@bulwarkmail.org>"'
 
 # Rate limit for the publishing API (the app limits too; this catches floods early).
