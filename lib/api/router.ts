@@ -47,7 +47,10 @@ export function router(routes: Route[], base = "/api/v2") {
   return (method: Method) =>
     handle(async (request: Request) => {
       const url = new URL(request.url);
-      const path = url.pathname.startsWith(base) ? url.pathname.slice(base.length) : url.pathname;
+      // next.config.ts rewrites the well-known keyring address here; a
+      // rewrite keeps the original URL, so map it by hand.
+      const path = url.pathname === "/.well-known/bulwark-extension-keys.json" ? "/keys"
+        : url.pathname.startsWith(base) ? url.pathname.slice(base.length) : url.pathname;
       let allowed = false;
       for (const r of routes) {
         const params = match(r.path, path);

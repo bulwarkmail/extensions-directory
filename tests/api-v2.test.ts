@@ -160,3 +160,14 @@ describe("ratings and reports", () => {
     expect((await send("One report too many here")).status).toBe(429);
   });
 });
+
+describe("keyring", () => {
+  it("answers at /api/v2/keys and at the well-known address", async () => {
+    db.insert(schema.keyrings).values({ document: JSON.stringify({ _type: "https://extensions.bulwarkmail.org/keyring/v1", keys: [] }) }).run();
+    for (const url of ["https://extensions.test/api/v2/keys", "https://extensions.test/.well-known/bulwark-extension-keys.json"]) {
+      const res = await dispatch("GET")(new Request(url));
+      expect(res.status).toBe(200);
+      expect((await res.json())._type).toBe("https://extensions.bulwarkmail.org/keyring/v1");
+    }
+  });
+});
