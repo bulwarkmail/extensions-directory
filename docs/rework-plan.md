@@ -128,10 +128,12 @@ These shape everything below. Each is open to change at review.
   field from a frozen key list and snapshot-tested, so adding a column can
   never leak into v1 again. One deliberate change: `author.email` is always
   `null` in public responses (the key stays). The webmail doesn't read it.
-- **New dependencies:** `jose` (JWT and JWKS), `vitest` (tests), `sharp`
-  (re-encoding every image, section 5), and a
-  Markdown renderer with sanitizing (`marked` + `sanitize-html`, or
-  `remark`/`rehype-sanitize`; I'll pick the smaller at build time).
+- **New dependencies** (pinned exactly, all released at least two weeks
+  before they were added): `jose` 6.2.12, `vitest` 4.1.11 (vitest 5's
+  optional peers crash npm 10's resolver; update the lockfile with npm 11),
+  `sharp` 0.34.5 (the version Next already pulls in), `esbuild` 0.25.12
+  for bundling deploy scripts and later the worker, `marked` 18.0.14 and
+  `sanitize-html` 2.17.7 for author Markdown (`lib/markdown.ts`).
 - **Code layout:** API handlers stay thin; logic moves into `lib/` modules
   that tests call directly (`lib/publish/`, `lib/auth/`, `lib/signing/`,
   `lib/review/`, `lib/v1/serialize.ts`).
@@ -453,19 +455,31 @@ staging; the files route and the pages only ever serve those outputs.
   images) refused.
 - **Output:**
   - icon: 512×512 PNG (square, transparent padding when needed),
-  - banner: up to 1600 px wide WebP, plus a PNG fallback,
-  - screenshots and theme previews: up to 1920 px wide WebP, plus PNG.
+  - banner: up to 1600 px wide WebP,
+  - screenshots and theme previews: up to 1920 px wide WebP.
 
+  Every browser the webmail supports shows WebP; the social card renderer
+  doesn't, so it converts the banner to PNG when it draws the card.
   Re-encoding drops all metadata (EXIF, text chunks, ICC except sRGB
-  conversion). File names are generated (`icon.png`,
-  `screenshots/<n>.webp`), never taken from the repo.
+  conversion). File names are generated with a content hash
+  (`media/<slug>/icon-<hash>.png`, `media/<slug>/screenshot-2-<hash>.webp`),
+  never taken from the repo, so they can be cached forever.
 - **Where:** in the worker, never in the web process, since image decoders
-  are a common attack surface.
-- **Existing files:** the phase 1 script converts every stored image the
-  same way, writes the new files next to the old ones, updates
+  are a common attack surface. Until the worker exists (phase 3) the
+  approval route does it.
+- **Fonts:** SVG banners often contain text. librsvg draws it with the
+  fonts installed where the conversion runs, so the server (and later the
+  worker) needs a font package (`fonts-dejavu-core`, plus
+  `fonts-noto-core` for wider coverage), or the text comes out missing.
+- **Existing files:** `lib/reencode-media.ts` converts every stored image
+  the same way, writes the new files next to the old ones and updates
   `icon_path`, `banner_path`, `screenshots.path` and
-  `theme_previews.preview_path`, and keeps the old files so the old paths
-  still answer (with the PNG). It is idempotent and has a `--dry-run`.
+  `theme_previews.preview_path`. The old files stay on disk but are not
+  served any more. It is idempotent, has a `--dry-run`, and runs from
+  `deploy/migrate.cjs` (bundled to `deploy/dist/reencode-media.cjs` by
+  `npm run build:scripts`). An image that can't be converted is dropped
+  (icon or banner cleared, screenshot row deleted) and reported. Built in
+  phase 1.
 
 The webmail builds image URLs from `iconPath`, `bannerPath` and
 `screenshots[].path`, so it picks up the new paths without a change.
@@ -539,14 +553,13 @@ Changes in behaviour, all compatible:
 - The bundle route adds headers `X-Bundle-Signature`,
   `X-Bundle-Signature-Key` and `X-Bundle-Statement` (section 8). Old
   webmails ignore them.
-- `/api/v1/files/` serves only the public prefixes (`icons/`, `banners/`,
-  `screenshots/`, `theme-previews/`, `bundles/`), applies the bundle rules
-  to `bundles/`, and only ever serves raster images (section 5, "Media").
-  Every response gets `X-Content-Type-Options: nosniff` and
-  `Content-Security-Policy: default-src 'none'; sandbox` as a second line
-  of defence. Existing `.svg` paths stored in the database are rewritten
-  to the rasterized `.png` by the migration; the old `.svg` URL keeps
-  answering with the PNG bytes as `image/png`, in case a webmail cached it.
+- `/api/v1/files/` serves only re-encoded images under `media/` (section
+  5, "Media") and bundle zips of approved versions of approved extensions.
+  The old raw paths (`icons/`, `banners/`, `screenshots/`,
+  `theme-previews/`, any SVG) answer 404. Webmails build image URLs from
+  the paths in each list response, so they follow the new paths without a
+  change. Every response gets `X-Content-Type-Options: nosniff` and
+  `Content-Security-Policy: default-src 'none'; sandbox`. Done in phase 1.
 - `POST /api/v1/submissions`, the v1 auth routes and the v1 admin routes
   keep working for the old UI until the new UI ships, then the write
   routes answer 410 with a pointer to v2. Nothing outside this repo calls
