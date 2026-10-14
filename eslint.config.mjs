@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "deploy/dist/**",
   ]),
   // Node scripts run outside Next as CommonJS, so require() is expected.
   {

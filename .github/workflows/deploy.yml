@@ -72,7 +72,9 @@ jobs:
 
       - name: Build
         if: env.ACTION == 'deploy'
-        run: npm run build
+        run: |
+          npm run build
+          npm run build:scripts
         env:
           DATABASE_PATH: ${{ runner.temp }}/build.db
           UPLOADS_DIR: ${{ runner.temp }}/uploads
@@ -91,6 +93,7 @@ jobs:
           cp -a public release/public
           mkdir -p release/drizzle && cp -a drizzle/migrations release/drizzle/
           mkdir -p release/deploy && cp deploy/migrate.cjs deploy/ecosystem.config.cjs release/deploy/
+          cp -a deploy/dist release/deploy/dist
           # The migrator is not traced into the standalone node_modules.
           rm -rf release/node_modules/drizzle-orm && cp -a node_modules/drizzle-orm release/node_modules/
           rm -f release/.env*

@@ -119,25 +119,25 @@ exports[`GET /api/v1/extension/{slug} > icon > evil 1`] = `
 
 exports[`GET /api/v1/extension/{slug} > icon > jitsi-meet 1`] = `
 {
-  "bytes": 70,
   "headers": {
-    "cache-control": "public, max-age=86400",
-    "content-type": "image/png",
+    "content-type": "application/json",
   },
-  "sha256": "c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77",
-  "status": 200,
+  "json": {
+    "error": "Icon not found",
+  },
+  "status": 404,
 }
 `;
 
 exports[`GET /api/v1/extension/{slug} > icon > nord 1`] = `
 {
-  "bytes": 136,
   "headers": {
-    "cache-control": "public, max-age=86400",
-    "content-type": "image/svg+xml",
+    "content-type": "application/json",
   },
-  "sha256": "4c6ef0dec4ccc066a0ec125e4dd3b7bab25a3802c289f2964137adde9222724d",
-  "status": 200,
+  "json": {
+    "error": "Icon not found",
+  },
+  "status": 404,
 }
 `;
 
@@ -1207,14 +1207,13 @@ exports[`GET /api/v1/extensions > /api/v1/extensions?type=theme 1`] = `
 
 exports[`GET /api/v1/files/{path} > banners/jitsi-meet/banner.svg 1`] = `
 {
-  "bytes": 136,
   "headers": {
-    "cache-control": "public, max-age=86400",
-    "content-length": "136",
-    "content-type": "image/svg+xml",
+    "content-type": "application/json",
   },
-  "sha256": "4c6ef0dec4ccc066a0ec125e4dd3b7bab25a3802c289f2964137adde9222724d",
-  "status": 200,
+  "json": {
+    "error": "File not found",
+  },
+  "status": 404,
 }
 `;
 
@@ -1224,7 +1223,9 @@ exports[`GET /api/v1/files/{path} > bundles/jitsi-meet/1.0.0/jitsi-meet-1.0.0.zi
   "headers": {
     "cache-control": "public, max-age=86400",
     "content-length": "417",
+    "content-security-policy": "default-src 'none'; sandbox",
     "content-type": "application/zip",
+    "x-content-type-options": "nosniff",
   },
   "sha256": "3ae5426bc6071830ca76456a948b6ababb9e4ab278838bdb095bd5994f7c9fb1",
   "status": 200,
@@ -1233,14 +1234,13 @@ exports[`GET /api/v1/files/{path} > bundles/jitsi-meet/1.0.0/jitsi-meet-1.0.0.zi
 
 exports[`GET /api/v1/files/{path} > icons/jitsi-meet/icon.png 1`] = `
 {
-  "bytes": 70,
   "headers": {
-    "cache-control": "public, max-age=86400",
-    "content-length": "70",
-    "content-type": "image/png",
+    "content-type": "application/json",
   },
-  "sha256": "c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77",
-  "status": 200,
+  "json": {
+    "error": "File not found",
+  },
+  "status": 404,
 }
 `;
 
@@ -1250,9 +1250,9 @@ exports[`GET /api/v1/files/{path} > icons/jitsi-meet/notes.txt 1`] = `
     "content-type": "application/json",
   },
   "json": {
-    "error": "File type not allowed",
+    "error": "File not found",
   },
-  "status": 403,
+  "status": 404,
 }
 `;
 
@@ -1270,40 +1270,37 @@ exports[`GET /api/v1/files/{path} > icons/missing/icon.png 1`] = `
 
 exports[`GET /api/v1/files/{path} > icons/nord/icon.svg 1`] = `
 {
-  "bytes": 136,
   "headers": {
-    "cache-control": "public, max-age=86400",
-    "content-length": "136",
-    "content-type": "image/svg+xml",
+    "content-type": "application/json",
   },
-  "sha256": "4c6ef0dec4ccc066a0ec125e4dd3b7bab25a3802c289f2964137adde9222724d",
-  "status": 200,
+  "json": {
+    "error": "File not found",
+  },
+  "status": 404,
 }
 `;
 
 exports[`GET /api/v1/files/{path} > screenshots/jitsi-meet/1.png 1`] = `
 {
-  "bytes": 70,
   "headers": {
-    "cache-control": "public, max-age=86400",
-    "content-length": "70",
-    "content-type": "image/png",
+    "content-type": "application/json",
   },
-  "sha256": "c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77",
-  "status": 200,
+  "json": {
+    "error": "File not found",
+  },
+  "status": 404,
 }
 `;
 
 exports[`GET /api/v1/files/{path} > theme-previews/nord/light.png 1`] = `
 {
-  "bytes": 70,
   "headers": {
-    "cache-control": "public, max-age=86400",
-    "content-length": "70",
-    "content-type": "image/png",
+    "content-type": "application/json",
   },
-  "sha256": "c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77",
-  "status": 200,
+  "json": {
+    "error": "File not found",
+  },
+  "status": 404,
 }
 `;
 

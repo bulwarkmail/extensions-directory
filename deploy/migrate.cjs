@@ -2,9 +2,11 @@
 // drizzle/migrations. Runs from an unpacked release (see
 // deploy/extdir-deploy.sh and .github/workflows/deploy.yml), where
 // drizzle-kit is not installed, so it uses the migrator that ships with
-// drizzle-orm. Already-applied migrations are skipped.
+// drizzle-orm. Already-applied migrations are skipped. Then it runs the
+// data steps bundled into deploy/dist (npm run build:scripts).
 //
 //   DATABASE_PATH=/path/extensions.db node deploy/migrate.cjs [--backup /path/backup.db]
+const fs = require("fs");
 const path = require("path");
 const Database = require("better-sqlite3");
 const { drizzle } = require("drizzle-orm/better-sqlite3");
@@ -33,7 +35,34 @@ async function main() {
   const before = count();
   migrate(drizzle(sqlite), { migrationsFolder: path.join(__dirname, "..", "drizzle", "migrations") });
   console.log(`migrations: ${before} applied before, ${count()} after`);
+
+  // Re-encode images stored before lib/images.ts (scripts/reencode-media.ts).
+  // Converted rows are skipped, so this is quick once done. A failure here
+  // doesn't stop the deploy: unconverted images are simply not served.
+  const reencode = path.join(__dirname, "dist", "reencode-media.cjs");
+  if (fs.existsSync(reencode)) {
+    try {
+      await require(reencode).run(sqlite, uploadsDir());
+    } catch (err) {
+      console.error("media: conversion failed, images stay unconverted:", err);
+    }
+  }
   sqlite.close();
+}
+
+// UPLOADS_DIR as the app sees it: the environment, else the release's .env
+// (a link to the shared one), else the app's default.
+function uploadsDir() {
+  let dir = process.env.UPLOADS_DIR;
+  if (!dir) {
+    try {
+      const m = fs.readFileSync(".env", "utf8").match(/^\s*UPLOADS_DIR\s*=\s*["']?(.*?)["']?\s*$/m);
+      if (m) dir = m[1];
+    } catch {
+      // no .env
+    }
+  }
+  return path.resolve(dir || path.join("data", "uploads"));
 }
 
 main().catch((err) => {

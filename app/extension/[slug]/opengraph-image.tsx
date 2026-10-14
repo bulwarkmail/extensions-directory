@@ -1,7 +1,9 @@
 import { ImageResponse } from "next/og";
 import { readFile } from "fs/promises";
 import path from "path";
+import sharp from "sharp";
 import { getExtensionBySlug } from "@/lib/db/queries";
+import { MEDIA_PATH_RE } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const contentType = "image/png";
@@ -19,28 +21,17 @@ const FIELD = "#db2d54";
 const ON_FIELD = "#ffffff";
 const FRAME = "rgba(255,255,255,0.55)";
 
-function mimeFor(p: string): string {
-  const ext = path.extname(p).toLowerCase();
-  if (ext === ".svg") return "image/svg+xml";
-  if (ext === ".png") return "image/png";
-  if (ext === ".webp") return "image/webp";
-  return "image/jpeg";
-}
-
-async function readAsDataUrl(absPath: string): Promise<string | null> {
+// Only re-encoded media (lib/images.ts). The card renderer reads PNG and
+// JPEG but not WebP, so banners are converted on the way in.
+async function loadUpload(rel: string | null): Promise<string | null> {
+  if (!rel || !MEDIA_PATH_RE.test(rel)) return null;
   try {
-    const buf = await readFile(absPath);
-    return `data:${mimeFor(absPath)};base64,${buf.toString("base64")}`;
+    const buf = await readFile(path.join(UPLOADS_DIR, rel));
+    const png = rel.endsWith(".png") ? buf : await sharp(buf).png().toBuffer();
+    return `data:image/png;base64,${png.toString("base64")}`;
   } catch {
     return null;
   }
-}
-
-async function loadUpload(rel: string | null): Promise<string | null> {
-  if (!rel) return null;
-  const safe = rel.replace(/^\/+/, "").replace(/\\/g, "/");
-  if (safe.split("/").includes("..")) return null;
-  return readAsDataUrl(path.join(UPLOADS_DIR, safe));
 }
 
 // Static instances of Hanken Grotesk (SIL Open Font License) shipped in

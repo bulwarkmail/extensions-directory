@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getExtensionBySlug } from "@/lib/db/queries";
-import { getStoredFile } from "@/lib/storage";
+import { getStoredFile, MEDIA_PATH_RE } from "@/lib/storage";
 import { errorResponse } from "@/lib/utils";
 
 export async function GET(
@@ -11,7 +11,14 @@ export async function GET(
     const { slug } = await params;
     const extension = await getExtensionBySlug(slug);
 
-    if (!extension || extension.status !== "approved" || !extension.iconPath) {
+    // Only re-encoded icons (lib/images.ts) are served; an icon from before
+    // the conversion has no media/ path and is treated as missing.
+    if (
+      !extension ||
+      extension.status !== "approved" ||
+      !extension.iconPath ||
+      !MEDIA_PATH_RE.test(extension.iconPath)
+    ) {
       return errorResponse("Icon not found", 404);
     }
 
@@ -20,14 +27,12 @@ export async function GET(
       return errorResponse("Icon not found", 404);
     }
 
-    const contentType = extension.iconPath.endsWith(".svg")
-      ? "image/svg+xml"
-      : "image/png";
-
     return new Response(new Uint8Array(file), {
       headers: {
-        "Content-Type": contentType,
+        "Content-Type": extension.iconPath.endsWith(".png") ? "image/png" : "image/webp",
         "Cache-Control": "public, max-age=86400",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'; sandbox",
       },
     });
   } catch (error) {

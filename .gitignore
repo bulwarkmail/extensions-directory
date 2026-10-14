@@ -51,3 +51,6 @@ next-env.d.ts
 /data/*.db-wal
 /data/build-cache/
 /data/tmp-builds/
+
+# bundled deploy scripts (npm run build:scripts)
+/deploy/dist/

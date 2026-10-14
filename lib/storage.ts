@@ -12,6 +12,15 @@ function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+/** Absolute path for a stored file, or null when it would leave UPLOADS_DIR. */
+function resolveUpload(relativePath: string): string | null {
+  const normalized = path.normalize(relativePath);
+  if (normalized.startsWith("..") || path.isAbsolute(normalized)) return null;
+  const root = path.resolve(UPLOADS_DIR);
+  const full = path.resolve(root, normalized);
+  return full.startsWith(root + path.sep) ? full : null;
+}
+
 // Bundle storage: /data/uploads/bundles/{slug}/{version}/{slug}-{version}.zip
 export async function storeBundleFile(
   slug: string,
@@ -36,134 +45,28 @@ export async function storeBundleFile(
   };
 }
 
-// Icon storage: /data/uploads/icons/{slug}/icon.{ext}
-export async function storeIcon(
-  slug: string,
-  data: Buffer,
-  ext: string
-): Promise<string> {
-  const safeSlug = sanitizeFilename(slug);
-  const safeExt = ext === "svg" ? "svg" : "png";
-  const dir = path.join(UPLOADS_DIR, "icons", safeSlug);
-  await ensureDir(dir);
+/** Paths the image encoder writes (lib/images.ts mediaPath). */
+export const MEDIA_PATH_RE = /^media\/[a-z0-9_-]+\/[a-z0-9-]+-[0-9a-f]{12}\.(png|webp)$/;
 
-  const filePath = path.join(dir, `icon.${safeExt}`);
-  await fs.writeFile(filePath, data);
-  return `icons/${safeSlug}/icon.${safeExt}`;
-}
-
-const ALLOWED_IMG_EXTS = new Set(["png", "jpg", "jpeg", "webp", "svg"]);
-function safeImgExt(ext: string | undefined): string {
-  const lower = (ext || "png").toLowerCase().replace(/^\./, "");
-  return ALLOWED_IMG_EXTS.has(lower) ? lower : "png";
-}
-
-// Banner storage
-export async function storeBanner(
-  slug: string,
-  data: Buffer,
-  ext: string = "png",
-): Promise<string> {
-  const safeSlug = sanitizeFilename(slug);
-  const safeExt = safeImgExt(ext);
-  const dir = path.join(UPLOADS_DIR, "banners", safeSlug);
-  await ensureDir(dir);
-
-  const filePath = path.join(dir, `banner.${safeExt}`);
-  await fs.writeFile(filePath, data);
-  return `banners/${safeSlug}/banner.${safeExt}`;
-}
-
-// Screenshot storage
-export async function storeScreenshot(
-  slug: string,
-  data: Buffer,
-  screenshotId: string,
-  ext: string = "png",
-): Promise<string> {
-  const safeSlug = sanitizeFilename(slug);
-  const safeId = sanitizeFilename(screenshotId);
-  const safeExt = safeImgExt(ext);
-  const dir = path.join(UPLOADS_DIR, "screenshots", safeSlug);
-  await ensureDir(dir);
-
-  const filePath = path.join(dir, `${safeId}.${safeExt}`);
-  await fs.writeFile(filePath, data);
-  return `screenshots/${safeSlug}/${safeId}.${safeExt}`;
-}
-
-// Theme preview storage
-export async function storeThemePreview(
-  slug: string,
-  variant: string,
-  data: Buffer
-): Promise<string> {
-  const safeSlug = sanitizeFilename(slug);
-  const safeVariant = sanitizeFilename(variant);
-  const dir = path.join(UPLOADS_DIR, "theme-previews", safeSlug);
-  await ensureDir(dir);
-
-  const filePath = path.join(dir, `${safeVariant}.png`);
-  await fs.writeFile(filePath, data);
-  return `theme-previews/${safeSlug}/${safeVariant}.png`;
+/**
+ * Store a re-encoded image at its media/ path. Only output of the encoder
+ * goes here; the files route serves nothing else as an image.
+ */
+export async function storeMedia(relativePath: string, data: Buffer): Promise<void> {
+  const full = MEDIA_PATH_RE.test(relativePath) ? resolveUpload(relativePath) : null;
+  if (!full) throw new Error(`Not a media path: ${relativePath}`);
+  await ensureDir(path.dirname(full));
+  await fs.writeFile(full, data);
 }
 
 // Read a stored file
 export async function getStoredFile(
   relativePath: string
 ): Promise<Buffer | null> {
-  // Prevent path traversal
-  const normalized = path.normalize(relativePath);
-  if (normalized.startsWith("..") || path.isAbsolute(normalized)) {
-    return null;
-  }
-
-  const filePath = path.join(UPLOADS_DIR, normalized);
-
-  // Double-check the resolved path is under UPLOADS_DIR
-  const resolvedPath = path.resolve(filePath);
-  const resolvedUploads = path.resolve(UPLOADS_DIR);
-  if (!resolvedPath.startsWith(resolvedUploads)) {
-    return null;
-  }
-
+  const full = resolveUpload(relativePath);
+  if (!full) return null;
   try {
-    return await fs.readFile(filePath);
-  } catch {
-    return null;
-  }
-}
-
-// Delete a stored file
-export async function deleteStoredFile(relativePath: string): Promise<void> {
-  const normalized = path.normalize(relativePath);
-  if (normalized.startsWith("..") || path.isAbsolute(normalized)) return;
-
-  const filePath = path.join(UPLOADS_DIR, normalized);
-  const resolvedPath = path.resolve(filePath);
-  const resolvedUploads = path.resolve(UPLOADS_DIR);
-  if (!resolvedPath.startsWith(resolvedUploads)) return;
-
-  try {
-    await fs.unlink(filePath);
-  } catch {
-    // Ignore if not found
-  }
-}
-
-// Get file info
-export async function getFileInfo(relativePath: string) {
-  const normalized = path.normalize(relativePath);
-  if (normalized.startsWith("..") || path.isAbsolute(normalized)) return null;
-
-  const filePath = path.join(UPLOADS_DIR, normalized);
-  const resolvedPath = path.resolve(filePath);
-  const resolvedUploads = path.resolve(UPLOADS_DIR);
-  if (!resolvedPath.startsWith(resolvedUploads)) return null;
-
-  try {
-    const stat = await fs.stat(filePath);
-    return { size: stat.size, modifiedAt: stat.mtime };
+    return await fs.readFile(full);
   } catch {
     return null;
   }

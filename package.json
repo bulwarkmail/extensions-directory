@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:scripts": "esbuild scripts/reencode-media.ts --bundle --platform=node --target=node22 --format=cjs --external:sharp --external:better-sqlite3 --outfile=deploy/dist/reencode-media.cjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",
@@ -37,6 +38,7 @@
     "@types/uuid": "^10.0.0",
     "babel-plugin-react-compiler": "1.0.0",
     "drizzle-kit": "^0.31.10",
+    "esbuild": "0.25.12",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
