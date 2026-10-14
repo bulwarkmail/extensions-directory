@@ -25,6 +25,9 @@ mkdir -p /var/lib/extbuild
 W=$(mktemp -d /var/lib/extbuild/job-XXXXXXXX)
 cleanup() {
   docker rm -f "extbuild-${W##*-}-i" "extbuild-${W##*-}-b" >/dev/null 2>&1
+  # Files the build made belong to the container's user; remove them as it.
+  docker run --rm --network none --user 1000:1000 -v "$W:/build" "$IMAGE" \
+    sh -c 'rm -rf /build/* /build/.[!.]* /build/..?*' >/dev/null 2>&1
   rm -rf "$W"
 }
 trap cleanup EXIT
