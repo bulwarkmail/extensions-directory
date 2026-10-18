@@ -12,7 +12,7 @@ type Version = typeof extensionVersions.$inferSelect;
 export const fileUrl = (p: string | null) => (p ? `${siteUrl()}/api/v1/files/${p}` : null);
 
 export function authorView(a: Author | null) {
-  return a ? { login: a.githubLogin, name: a.displayName, avatarUrl: a.avatarUrl, verified: !!a.verified, url: `${siteUrl()}/author/${a.githubLogin}` } : null;
+  return a ? { login: a.githubLogin, name: a.displayName, avatarUrl: a.avatarUrl, verified: !!a.verified, organization: a.kind === "org", url: `${siteUrl()}/author/${a.githubLogin}` } : null;
 }
 
 export function versionBrief(v: Version, slug: string) {

@@ -6,7 +6,7 @@
 import { getIronSession, type SessionOptions } from "iron-session";
 import { cookies } from "next/headers";
 import type { Role } from "@/lib/db/schema";
-import { isBanned, loadAuthor } from "./guard";
+import { isBanned, isOrg, loadAuthor } from "./guard";
 
 export interface SessionData {
   authorId?: string;
@@ -46,12 +46,12 @@ export function hasRole(role: Role, needed: Role): boolean {
 
 export type SessionUser = NonNullable<Awaited<ReturnType<typeof loadAuthor>>>;
 
-/** The signed-in author, or null. Banned or outdated sessions count as signed out. */
+/** The signed-in author, or null. Banned or outdated sessions, and organizations, count as signed out. */
 export async function currentUser(): Promise<SessionUser | null> {
   const session = await getSession();
   if (!session.authorId) return null;
   const author = await loadAuthor(session.authorId);
-  if (!author || isBanned(author) || (session.epoch ?? 0) !== author.sessionEpoch) return null;
+  if (!author || isBanned(author) || isOrg(author) || (session.epoch ?? 0) !== author.sessionEpoch) return null;
   return author;
 }
 

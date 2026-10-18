@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { currentUser } from "@/lib/auth/session";
 import { SignInPrompt } from "@/components/sign-in-prompt";
 import { DashboardNav } from "@/components/dashboard-nav";
+import { orgsOf } from "@/lib/orgs";
 import { NewExtensionForm } from "./form";
 
 export const metadata: Metadata = { title: "Add an extension" };
@@ -22,7 +23,7 @@ export default async function NewExtensionPage() {
           </p>
         </div>
       </div>
-      <NewExtensionForm />
+      <NewExtensionForm login={user.githubLogin} orgs={orgsOf(user.id).map((o) => ({ login: o.login, name: o.name }))} />
       <p className="bw-help" style={{ marginTop: 24 }}>
         The id must match <code className="bw-icode">id</code> in manifest.json. A name with nothing published is released after 90 days.
       </p>

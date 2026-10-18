@@ -63,7 +63,7 @@ const all = <T>(s: string, ...p: unknown[]) => sqlite.prepare(s).all(...p) as T[
 
 describe("0003_publishing", () => {
   it("moves staff roles onto author rows, creating missing authors", () => {
-    expect(all("select github_login, role from authors order by github_id")).toEqual([
+    expect(all("select github_login, role from authors where kind = 'user' order by github_id")).toEqual([
       { github_login: "alice", role: "super_admin" },
       { github_login: "mallory", role: "author" },
       { github_login: "rev", role: "reviewer" },

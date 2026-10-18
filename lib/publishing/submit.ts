@@ -132,8 +132,12 @@ export async function createSubmission(req: SubmitRequest): Promise<SubmitResult
   return { submission, pollToken };
 }
 
-/** A pending extension owned by the author: the name is theirs until released. */
-export function reserveExtension(authorId: string, e: { slug: string; name: string; description: string; type: "plugin" | "theme"; pluginType: "hook" | "ui-extension" | "sidebar-app" | null; host: SourceHost; repo: string; repoId?: string | null; subpath: string }) {
+/**
+ * A pending extension owned by the author: the name is theirs until released.
+ * `ownerMember` gets an owner row in extension_members; null for an
+ * organization, whose members manage it through the organization.
+ */
+export function reserveExtension(authorId: string, e: { slug: string; name: string; description: string; type: "plugin" | "theme"; pluginType: "hook" | "ui-extension" | "sidebar-app" | null; host: SourceHost; repo: string; repoId?: string | null; subpath: string }, ownerMember: string | null = authorId) {
   const now = new Date();
   return db.$client.transaction(() => {
     const taken = db.select({ id: extensions.id }).from(extensions).where(eq(extensions.slug, e.slug)).get();
@@ -143,7 +147,7 @@ export function reserveExtension(authorId: string, e: { slug: string; name: stri
       authorId, githubRepo: e.repo, subpath: e.subpath, sourceHost: e.host, sourceRepoId: e.repoId ?? null,
       status: "pending", reservedAt: now, createdAt: now, updatedAt: now,
     }).returning().get();
-    db.insert(extensionMembers).values({ extensionId: row.id, authorId, role: "owner", addedBy: authorId }).run();
+    if (ownerMember) db.insert(extensionMembers).values({ extensionId: row.id, authorId: ownerMember, role: "owner", addedBy: ownerMember }).run();
     return row;
   })();
 }

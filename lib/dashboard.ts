@@ -7,20 +7,19 @@ import {
 } from "./db/schema";
 import { releasesOf } from "./catalog";
 import { memberRole } from "./auth/guard";
+import { extensionsManagedBy, orgMembersOf } from "./orgs";
 import { tokensOf } from "./auth/tokens";
 import { downloadsByDay } from "./downloads";
 import type { SessionUser } from "./auth/session";
 import { hasRole } from "./auth/session";
 
 export function myExtensions(userId: string) {
-  const rows = db.select({ e: extensions, role: extensionMembers.role }).from(extensionMembers)
-    .innerJoin(extensions, eq(extensions.id, extensionMembers.extensionId))
-    .where(eq(extensionMembers.authorId, userId)).orderBy(desc(extensions.updatedAt)).all();
+  const rows = extensionsManagedBy(userId);
   const releases = releasesOf(rows.map((r) => r.e.id));
   const open = rows.length
     ? db.select().from(submissions).where(and(inArray(submissions.extensionId, rows.map((r) => r.e.id)), inArray(submissions.status, OPEN_STATUSES), eq(submissions.dryRun, false))).all()
     : [];
-  return rows.map(({ e, role }) => ({ ext: e, role, latest: (releases.get(e.id) ?? []).find((v) => !v.yankedAt) ?? null, open: open.filter((s) => s.extensionId === e.id) }));
+  return rows.map(({ e, role, org }) => ({ ext: e, role, org, latest: (releases.get(e.id) ?? []).find((v) => !v.yankedAt) ?? null, open: open.filter((s) => s.extensionId === e.id) }));
 }
 
 export function mySubmissions(userId: string, limit = 15) {
@@ -35,10 +34,12 @@ export async function manageData(slug: string, user: SessionUser) {
   const role = await memberRole(user.id, ext.id);
   const staff = hasRole(user.role, "admin");
   if (!role && !staff) return null;
+  const owner = db.select({ kind: authors.kind, login: authors.githubLogin, name: authors.displayName }).from(authors).where(eq(authors.id, ext.authorId)).get();
   return {
     ext,
     role,
     staff,
+    org: owner?.kind === "org" ? { login: owner.login, name: owner.name, members: orgMembersOf(ext.authorId) } : null,
     versions: releasesOf([ext.id]).get(ext.id) ?? [],
     members: db.select({ authorId: extensionMembers.authorId, role: extensionMembers.role, login: authors.githubLogin, name: authors.displayName })
       .from(extensionMembers).innerJoin(authors, eq(authors.id, extensionMembers.authorId)).where(eq(extensionMembers.extensionId, ext.id)).all(),
@@ -104,7 +105,8 @@ export function allExtensions() {
 }
 
 export function allAuthors(q?: string) {
-  return db.select().from(authors).where(q ? sql`${authors.githubLogin} like ${`%${q}%`}` : undefined).orderBy(desc(authors.createdAt)).limit(500).all();
+  const rows = db.select().from(authors).where(q ? sql`${authors.githubLogin} like ${`%${q}%`}` : undefined).orderBy(desc(authors.createdAt)).limit(500).all();
+  return rows.map((a) => ({ ...a, members: a.kind === "org" ? orgMembersOf(a.id) : null }));
 }
 
 export function allReports(status: string) {

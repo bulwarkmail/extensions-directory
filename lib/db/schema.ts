@@ -26,6 +26,11 @@ const json = <T>(name: string) => text(name, { mode: "json" }).$type<T>();
 export const ROLES = ["author", "reviewer", "admin", "super_admin"] as const;
 export type Role = (typeof ROLES)[number];
 
+// A person signs in with GitHub; an organization (a GitHub org) only owns
+// extensions, and its members (org_members) manage them. An org never signs in.
+export const AUTHOR_KINDS = ["user", "org"] as const;
+export type AuthorKind = (typeof AUTHOR_KINDS)[number];
+
 // Authors (linked to GitHub accounts). Also directory staff: `role`.
 export const authors = sqliteTable("authors", {
   id: uuid(),
@@ -48,7 +53,25 @@ export const authors = sqliteTable("authors", {
   // Bumped to end every session of this account.
   sessionEpoch: integer("session_epoch").notNull().default(0),
   notifyEmail: integer("notify_email", { mode: "boolean" }).notNull().default(true),
+  kind: text("kind", { enum: AUTHOR_KINDS }).notNull().default("user"),
 });
+
+export const ORG_ROLES = ["owner", "member"] as const;
+export type OrgRole = (typeof ORG_ROLES)[number];
+
+// Members of an organization author. Org owners act as owners of every
+// extension the org owns, members as maintainers.
+export const orgMembers = sqliteTable(
+  "org_members",
+  {
+    orgId: uuidCol("org_id").notNull().references(() => authors.id),
+    authorId: uuidCol("author_id").notNull().references(() => authors.id),
+    role: text("role", { enum: ORG_ROLES }).notNull(),
+    addedBy: uuidCol("added_by"),
+    createdAt: timestamp("created_at"),
+  },
+  (t) => [primaryKey({ columns: [t.orgId, t.authorId] }), index("idx_org_members_author").on(t.authorId)]
+);
 
 // Directory staff from before the rework. Their role now lives on
 // authors.role; this table stays because review columns reference it.

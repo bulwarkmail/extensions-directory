@@ -22,7 +22,7 @@ export default async function ManagePage({ params }: { params: Promise<{ slug: s
   if (!user) return <SignInPrompt title="Sign in to manage this extension." text="Only its maintainers can manage an extension." returnTo={`/dashboard/extensions/${slug}`} />;
   const data = await manageData(slug, user);
   if (!data) notFound();
-  const { ext, role, staff, versions, members, publishers, submissions, textChanges } = data;
+  const { ext, role, staff, org, versions, members, publishers, submissions, textChanges } = data;
   const base = `/extensions/${ext.slug}`;
   const owner = role === "owner" || staff;
   const src = source(ext.sourceHost);
@@ -57,7 +57,10 @@ jobs:
             {ext.status === "approved" ? <Link className="bw-link" href={`/extension/${ext.slug}`}>Public page</Link> : null}
           </div>
           {ext.status === "suspended" ? <p className="bw-note bw-note-warning">This extension is suspended{ext.suspendedReason ? `: ${ext.suspendedReason}` : ""}. Nothing of it can be downloaded or published.</p> : null}
-          {ext.status === "pending" && ext.reservedAt ? <p className="bw-help">Reserved {formatDate(ext.reservedAt)}. Publish a version within 90 days of that, or the name is released.</p> : null}
+          {org ? <p className="bw-help">Owned by the organization <Link className="bw-link" href={`/author/${org.login}`}>{org.name}</Link>. Its owners and members ({org.members.map((m) => `@${m.login}`).join(", ") || "none yet"}) manage it with the members below.</p> : null}
+          {ext.status === "pending" && ext.reservedAt
+            ? <p className="bw-help">Reserved {formatDate(ext.reservedAt)}.{org ? " An organization keeps its names until it publishes them." : " Publish a version within 90 days of that, or the name is released."}</p>
+            : null}
         </div>
       </div>
 

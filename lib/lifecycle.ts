@@ -165,7 +165,7 @@ export async function decideTextChange(id: string, approve: boolean, reviewerId:
 // ── members ──────────────────────────────────────────────────────────────────
 
 export async function addMember(ext: Ext, githubLogin: string, role: "owner" | "maintainer", actor: Actor, request?: Request) {
-  const a = db.select().from(authors).where(eq(authors.githubLogin, githubLogin)).get();
+  const a = db.select().from(authors).where(and(eq(authors.githubLogin, githubLogin), eq(authors.kind, "user"))).get();
   if (!a) throw new HttpError(404, `${githubLogin} has not signed in to the directory yet`, "not_found");
   await db.insert(extensionMembers).values({ extensionId: ext.id, authorId: a.id, role, addedBy: actor.id ?? null })
     .onConflictDoUpdate({ target: [extensionMembers.extensionId, extensionMembers.authorId], set: { role } });
@@ -174,7 +174,9 @@ export async function addMember(ext: Ext, githubLogin: string, role: "owner" | "
 
 export async function removeMember(ext: Ext, authorId: string, actor: Actor, request?: Request) {
   const owners = db.select().from(extensionMembers).where(and(eq(extensionMembers.extensionId, ext.id), eq(extensionMembers.role, "owner"))).all();
-  if (owners.length === 1 && owners[0].authorId === authorId) throw new HttpError(409, "An extension needs an owner; add another owner first", "last_owner");
+  // An organization's extension always has its org owners.
+  const orgOwned = db.select({ kind: authors.kind }).from(authors).where(eq(authors.id, ext.authorId)).get()?.kind === "org";
+  if (!orgOwned && owners.length === 1 && owners[0].authorId === authorId) throw new HttpError(409, "An extension needs an owner; add another owner first", "last_owner");
   await db.delete(extensionMembers).where(and(eq(extensionMembers.extensionId, ext.id), eq(extensionMembers.authorId, authorId)));
   if (ext.authorId === authorId) {
     const next = owners.find((o) => o.authorId !== authorId);

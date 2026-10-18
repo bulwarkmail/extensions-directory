@@ -46,7 +46,7 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <ul className="dx-rows">
-          {extensions.map(({ ext, role, latest, open }) => (
+          {extensions.map(({ ext, role, org, latest, open }) => (
             <li key={ext.id}>
               <ExtIcon name={ext.name} iconPath={ext.iconPath} />
               <div style={{ minWidth: 0 }}>
@@ -55,7 +55,7 @@ export default async function DashboardPage() {
                   <Status value={ext.status} />
                   {ext.deprecatedAt ? <Status value="deprecated" /> : null}
                   <span>{formatTypeLabel(ext.type, ext.pluginType)}</span>
-                  <span>{role === "owner" ? "Owner" : "Maintainer"}</span>
+                  <span>{role === "owner" ? "Owner" : "Maintainer"}{org ? `, through @${org}` : ""}</span>
                   {latest ? <span>Version {latest.version}{latest.publishedAt ? `, ${formatDate(latest.publishedAt)}` : ""}</span> : <span>Nothing published yet</span>}
                 </div>
                 {open.map((s) => (

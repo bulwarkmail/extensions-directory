@@ -26,8 +26,11 @@ export default async function AdminAuthors({ searchParams }: { searchParams: Pro
           <tbody>
             {rows.map((a) => (
               <tr key={a.id}>
-                <td><Link className="bw-link" href={`/author/${a.githubLogin}`}>@{a.githubLogin}</Link>{a.verified ? " ✓" : ""}<div className="bw-help">{a.email}</div></td>
-                <td>{a.role.replace("_", " ")}</td>
+                <td>
+                  <Link className="bw-link" href={`/author/${a.githubLogin}`}>@{a.githubLogin}</Link>{a.verified ? " ✓" : ""}
+                  <div className="bw-help">{a.members ? `Members: ${a.members.map((m) => `@${m.login}${m.role === "owner" ? " (owner)" : ""}`).join(", ") || "none"}` : a.email}</div>
+                </td>
+                <td>{a.kind === "org" ? "Organization" : a.role.replace("_", " ")}</td>
                 <td>{a.bannedAt ? <><Status value="banned" /><div className="bw-help">{a.bannedReason}</div></> : <Status value="active" />}</td>
                 <td style={{ whiteSpace: "nowrap" }}>{a.createdAt ? formatDate(a.createdAt) : ""}</td>
                 <td>
@@ -36,7 +39,7 @@ export default async function AdminAuthors({ searchParams }: { searchParams: Pro
                       ? <ActionButton path={`/admin/authors/${a.id}`} body={{ action: "unban" }} label="Unban" ghost small />
                       : a.id !== user.id ? <ActionButton path={`/admin/authors/${a.id}`} body={{ action: "ban" }} label="Ban" ghost small ask="Why? Banning ends their sessions, revokes their tokens and withdraws their open submissions." /> : null}
                     <ActionButton path={`/admin/authors/${a.id}`} body={{ action: a.verified ? "unverify" : "verify" }} label={a.verified ? "Unverify" : "Verify"} ghost small />
-                    {user.role === "super_admin" && a.id !== user.id ? (
+                    {user.role === "super_admin" && a.id !== user.id && a.kind !== "org" ? (
                       <ActionButton path={`/admin/authors/${a.id}`} body={{ action: "role" }} label="Change role" ghost small ask="New role: author, reviewer, admin or super_admin" askField="role" />
                     ) : null}
                   </div>

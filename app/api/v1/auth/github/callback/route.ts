@@ -1,12 +1,9 @@
 import { NextRequest } from "next/server";
 import crypto from "crypto";
-import { eq } from "drizzle-orm";
-import { db } from "@/lib/db/client";
-import { authors } from "@/lib/db/schema";
 import { exchangeCode, fetchProfile, safeReturnTo } from "@/lib/auth/github-oauth";
-import { getSession } from "@/lib/auth/session";
+import { getSession, HttpError } from "@/lib/auth/session";
 import { isBanned } from "@/lib/auth/guard";
-import { audit } from "@/lib/audit";
+import { authorForSignIn } from "@/lib/auth/sign-in";
 import { errorResponse } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
@@ -24,18 +21,12 @@ export async function GET(request: NextRequest) {
     delete session.oauthReturnTo;
 
     const profile = await fetchProfile(await exchangeCode(code));
-    const now = new Date();
-    let author = db.select().from(authors).where(eq(authors.githubId, profile.id)).get();
-    if (!author) {
-      author = db.insert(authors).values({
-        githubId: profile.id, githubLogin: profile.login, displayName: profile.name || profile.login, avatarUrl: profile.avatarUrl,
-        email: profile.email, bio: profile.bio, website: profile.blog, createdAt: now, updatedAt: now,
-      }).returning().get();
-      await audit({ kind: "author", id: author.id }, "author.sign_up", { kind: "author", id: author.id }, { login: profile.login }, request);
-    } else {
-      // GitHub logins can be renamed; keep the profile current.
-      db.update(authors).set({ githubLogin: profile.login, displayName: profile.name || profile.login, avatarUrl: profile.avatarUrl, email: profile.email ?? author.email, updatedAt: now })
-        .where(eq(authors.id, author.id)).run();
+    let author;
+    try {
+      author = await authorForSignIn(profile, request);
+    } catch (err) {
+      if (err instanceof HttpError) return errorResponse(err.message, err.status);
+      throw err;
     }
     if (isBanned(author)) {
       session.destroy();

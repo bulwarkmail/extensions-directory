@@ -2,7 +2,9 @@
 // advisories (staff), with moderation.
 import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { db } from "./db/client";
-import { advisories, authors, extensionMembers, extensions, ratings, REPORT_REASONS, reports, SEVERITIES } from "./db/schema";
+import { advisories, authors, extensions, ratings, REPORT_REASONS, reports, SEVERITIES } from "./db/schema";
+import { memberRole } from "./auth/guard";
+import { maintainerIds } from "./orgs";
 import { HttpError } from "./auth/session";
 import { audit, type Actor } from "./audit";
 import { queueNotification } from "./notify";
@@ -16,8 +18,7 @@ export async function rate(ext: Ext, authorId: string, stars: number, body: stri
   if (!Number.isInteger(stars) || stars < 1 || stars > 5) throw new HttpError(400, "Stars must be 1 to 5", "bad_request");
   if (body && body.length > 2000) throw new HttpError(400, "Keep the review under 2000 characters", "bad_request");
   if (ext.status !== "approved") throw new HttpError(404, "Extension not found", "not_found");
-  const member = db.select().from(extensionMembers).where(and(eq(extensionMembers.extensionId, ext.id), eq(extensionMembers.authorId, authorId))).get();
-  if (member) throw new HttpError(403, "You can't rate your own extension", "forbidden");
+  if (await memberRole(authorId, ext.id)) throw new HttpError(403, "You can't rate your own extension", "forbidden");
   await db.insert(ratings).values({ extensionId: ext.id, authorId, stars, body: body?.trim() || null })
     .onConflictDoUpdate({ target: [ratings.extensionId, ratings.authorId], set: { stars, body: body?.trim() || null, updatedAt: new Date() } });
 }
@@ -132,8 +133,8 @@ export async function updateAdvisory(id: string, patch: Partial<AdvisoryInput> &
 }
 
 async function notifyMaintainers(ext: Ext, a: { id: string; summary: string }) {
-  for (const m of db.select({ id: extensionMembers.authorId }).from(extensionMembers).where(eq(extensionMembers.extensionId, ext.id)).all()) {
-    await queueNotification(m.id, "advisory.published", { id: a.id, slug: ext.slug, summary: a.summary });
+  for (const id of maintainerIds(ext)) {
+    await queueNotification(id, "advisory.published", { id: a.id, slug: ext.slug, summary: a.summary });
   }
 }
 

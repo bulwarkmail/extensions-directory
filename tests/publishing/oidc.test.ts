@@ -173,3 +173,25 @@ describe("POST /api/v2/publish with a GitHub OIDC token", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("trusted publishing for an organization's extension", () => {
+  const ORG = "e1a8f4a1-9b4e-4568-afb7-d7e1cdf6afa4";
+
+  it("submits for an org member who set up the publisher, and stops when they leave the org", async () => {
+    await db.insert(schema.extensions).values({ id: "ext-orgp", slug: "org-plugin", name: "Org plugin", type: "plugin", pluginType: "hook", authorId: ORG, description: "x", githubRepo: "alice/plugins", subpath: "org-plugin", status: "pending" });
+    await db.insert(schema.orgMembers).values({ orgId: ORG, authorId: "author-alice", role: "member" });
+    await db.insert(schema.publishers).values({
+      id: "pub-org", extensionId: "ext-orgp", repository: "alice/plugins", repositoryId: "111", repositoryOwnerId: "222",
+      workflowPath: ".github/workflows/publish.yml", environment: "release", subpath: "org-plugin", allowedRefs: "tags", createdBy: "author-alice",
+    });
+    addRepo("alice/plugins", { info: { id: "111", ownerId: "222" } as never, commits: {
+      [sha(41)]: Object.fromEntries(Object.entries(plainPlugin("org-plugin", "1.0.0")).map(([k, v]) => [`org-plugin/${k}`, v])),
+    } });
+    const res = await publish(await token({ sha: sha(41) }), { subpath: "org-plugin" });
+    expect(res.status).toBe(202);
+    expect((await res.json()).data).toMatchObject({ slug: "org-plugin", version: "1.0.0" });
+
+    await db.delete(schema.orgMembers).where(eq(schema.orgMembers.authorId, "author-alice"));
+    await expectRefused(await publish(await token({ sha: sha(41) }), { subpath: "org-plugin" }), 403, "forbidden");
+  });
+});

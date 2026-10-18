@@ -73,7 +73,7 @@ export async function getStats() {
     extensions: one(sql`select count(*) n from extensions where status = 'approved'`),
     plugins: one(sql`select count(*) n from extensions where status = 'approved' and type = 'plugin'`),
     themes: one(sql`select count(*) n from extensions where status = 'approved' and type = 'theme'`),
-    authors: one(sql`select count(*) n from authors`),
+    authors: one(sql`select count(*) n from authors where kind = 'user'`),
     totalDownloads: one(sql`select coalesce(sum(total_downloads), 0) n from extensions`),
   };
 }

@@ -71,7 +71,7 @@ export default async function AuthorPage({ params }: Props) {
               <>
                 <span aria-hidden="true">·</span>
                 <BadgeCheck size={16} {...ICON} />
-                verified author
+                {author.kind === "org" ? "verified organization" : "verified author"}
               </>
             ) : null}
           </p>

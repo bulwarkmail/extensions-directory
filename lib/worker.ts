@@ -6,7 +6,7 @@ import fs from "fs/promises";
 import path from "path";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { db } from "./db/client";
-import { downloadStats, extensions, oidcTokenUses, rateLimits, submissions } from "./db/schema";
+import { authors, downloadStats, extensions, oidcTokenUses, rateLimits, submissions } from "./db/schema";
 import { processSubmission } from "./pipeline/process";
 import { PublishError, publishSubmission, signPublishedVersions } from "./pipeline/publish";
 import { clearStaging, stagingRoot } from "./pipeline/staging";
@@ -89,7 +89,10 @@ export async function housekeeping(now = new Date()): Promise<void> {
   }
 
   // Reserved names with nothing published: warn after 83 days, release after 90.
-  const reserved = await db.select().from(extensions).where(and(eq(extensions.status, "pending"), sql`${extensions.reservedAt} is not null`));
+  // An organization's reservations are kept: only staff create organizations,
+  // and they hold names for the project's own extensions.
+  const reserved = (await db.select({ e: extensions }).from(extensions).innerJoin(authors, eq(authors.id, extensions.authorId))
+    .where(and(eq(extensions.status, "pending"), sql`${extensions.reservedAt} is not null`, eq(authors.kind, "user")))).map((r) => r.e);
   for (const ext of reserved) {
     const open = db.select({ id: submissions.id }).from(submissions)
       .where(and(eq(submissions.extensionId, ext.id), inArray(submissions.status, ["queued", "building", "awaiting_review", "publishing"]), eq(submissions.dryRun, false))).get();

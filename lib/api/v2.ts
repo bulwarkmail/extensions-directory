@@ -3,10 +3,10 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
-  apiTokens, auditLog, authors, extensionMembers, extensions, extensionVersions, keyrings, publishers, reports,
+  apiTokens, auditLog, authors, extensions, extensionVersions, keyrings, publishers, reports,
   ratings, submissions, textChanges, webhooks, advisories, OPEN_STATUSES, SOURCE_HOSTS, type Role, type SourceHost, type TokenScope,
 } from "@/lib/db/schema";
-import { HttpError } from "@/lib/auth/session";
+import { hasRole, HttpError } from "@/lib/auth/session";
 import { memberRole } from "@/lib/auth/guard";
 import { createToken, revokeToken, tokensOf } from "@/lib/auth/tokens";
 import { ok, readJson, str } from "@/lib/http";
@@ -14,9 +14,10 @@ import { advisoriesFor, extensionBySlug, latestFor, listExtensions, mediaOf, new
 import { advisoryView, createAdvisory, handleReport, hideRating, rate, ratingsOf, removeRating, report, updateAdvisory } from "@/lib/community";
 import {
   addMember, addPublisher, banAuthor, decideTextChange, deprecate, extensionOr404, membersOf, proposeTextChange, removeMember,
-  removePublisher, setArchived, setFeatured, setMaxAppVersion, setRole, setSource, setVerified, suspend, unbanAuthor, undeprecate,
-  unsuspend, unyankVersion, yankVersion,
+  removePublisher, setArchived, setFeatured, setMaxAppVersion, setRole, setSource, setVerified, suspend, unbanAuthor,
+  undeprecate, unsuspend, unyankVersion, yankVersion,
 } from "@/lib/lifecycle";
+import { addOrgMember, assertOrgManager, extensionsManagedBy, orgMembersOf, orgOr404, orgRole, orgsOf, removeOrgMember, reservationOwner } from "@/lib/orgs";
 import { createSubmission, reserveExtension } from "@/lib/publishing/submit";
 import { submissionView } from "@/lib/publishing/view";
 import { approveSubmission, rebuildSubmission, rejectSubmission, withdrawSubmission } from "@/lib/review";
@@ -254,7 +255,10 @@ function sourceInput(body: Record<string, unknown>) {
 const authorRoutes: Route[] = [
   {
     method: "GET", path: "/me", auth: "user",
-    handler: async ({ user }) => ok({ id: user.id, login: user.githubLogin, name: user.displayName, avatarUrl: user.avatarUrl, email: user.email, role: user.role, notifyEmail: user.notifyEmail, verified: !!user.verified }),
+    handler: async ({ user }) => ok({
+      id: user.id, login: user.githubLogin, name: user.displayName, avatarUrl: user.avatarUrl, email: user.email, role: user.role, notifyEmail: user.notifyEmail, verified: !!user.verified,
+      organizations: orgsOf(user.id).map((o) => ({ login: o.login, name: o.name, role: o.role })),
+    }),
   },
   {
     method: "PATCH", path: "/me", auth: "user",
@@ -267,13 +271,13 @@ const authorRoutes: Route[] = [
   {
     method: "GET", path: "/me/extensions", auth: "user",
     handler: async ({ user }) => {
-      const rows = db.select({ e: extensions, role: extensionMembers.role }).from(extensionMembers).innerJoin(extensions, eq(extensions.id, extensionMembers.extensionId))
-        .where(eq(extensionMembers.authorId, user.id)).orderBy(desc(extensions.updatedAt)).all();
+      const rows = extensionsManagedBy(user.id);
       const releases = releasesOf(rows.map((r) => r.e.id));
       const open = rows.length ? db.select().from(submissions).where(and(inArray(submissions.extensionId, rows.map((r) => r.e.id)), inArray(submissions.status, [...OPEN_STATUSES, "build_failed", "blocked"]), eq(submissions.dryRun, false))).orderBy(desc(submissions.submittedAt)).all() : [];
-      return ok(rows.map(({ e, role }) => ({
+      return ok(rows.map(({ e, role, org }) => ({
         ...extensionSummary(e, null, newest(releases.get(e.id) ?? [], { channel: "beta", includeYanked: false }), undefined),
         role,
+        organization: org,
         reservedAt: e.reservedAt,
         suspendedReason: e.suspendedReason,
         openSubmissions: open.filter((s) => s.extensionId === e.id).slice(0, 5).map((s) => submissionView(s)),
@@ -289,10 +293,12 @@ const authorRoutes: Route[] = [
     },
   },
   {
-    // Reserve a name and say where its source lives.
+    // Reserve a name and say where its source lives. `owner` may name an
+    // organization the user belongs to.
     method: "POST", path: "/extensions", auth: "user",
     handler: async ({ user, request }) => {
       const body = await readJson(request);
+      const owner = reservationOwner(user, str(body.owner, "owner", { optional: true, max: 64 }));
       const slug = str(body.slug, "slug", { max: 64 })!;
       if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(slug)) throw new HttpError(400, "The id must be lowercase letters, digits and dashes, as in manifest.json", "bad_request");
       const type = body.type === "theme" ? "theme" : "plugin";
@@ -300,10 +306,10 @@ const authorRoutes: Route[] = [
       const info = await source(src.host).repoInfo(src.repo).catch(() => null);
       if (!info) throw new HttpError(400, `Repository ${src.repo} does not exist on ${src.host}`, "repo_not_found");
       if (!info.isPublic) throw new HttpError(400, `Repository ${src.repo} is not public`, "repo_private");
-      const ext = reserveExtension(user.id, { slug, name: str(body.name, "name", { optional: true, max: 100 }) ?? slug, description: str(body.description, "description", { optional: true, max: 500 }) ?? "", type, pluginType: type === "plugin" ? "hook" : null, host: src.host, repo: info.fullName, repoId: info.id, subpath: src.subpath });
+      const ext = reserveExtension(owner.id, { slug, name: str(body.name, "name", { optional: true, max: 100 }) ?? slug, description: str(body.description, "description", { optional: true, max: 500 }) ?? "", type, pluginType: type === "plugin" ? "hook" : null, host: src.host, repo: info.fullName, repoId: info.id, subpath: src.subpath }, owner.kind === "org" ? null : user.id);
       const { audit } = await import("@/lib/audit");
-      await audit({ kind: "author", id: user.id }, "extension.reserve", { kind: "extension", id: ext.id }, { slug }, request);
-      return ok({ slug: ext.slug, status: ext.status }, 201);
+      await audit({ kind: "author", id: user.id }, "extension.reserve", { kind: "extension", id: ext.id }, { slug, ...(owner.kind === "org" ? { org: owner.githubLogin } : {}) }, request);
+      return ok({ slug: ext.slug, status: ext.status, owner: owner.githubLogin }, 201);
     },
   },
   {
@@ -496,6 +502,36 @@ const authorRoutes: Route[] = [
     },
   },
   {
+    method: "GET", path: "/orgs/:login/members", auth: "user",
+    handler: async ({ user, params }) => {
+      const org = orgOr404(params.login);
+      if (!orgRole(user.id, org.id) && !hasRole(user.role, "admin")) throw new HttpError(404, "Organization not found", "not_found");
+      return ok(orgMembersOf(org.id));
+    },
+  },
+  {
+    method: "POST", path: "/orgs/:login/members", auth: "user",
+    handler: async (ctx) => {
+      const org = orgOr404(ctx.params.login);
+      assertOrgManager(ctx.user, org);
+      const body = await readJson(ctx.request);
+      const actor = { kind: orgRole(ctx.user.id, org.id) ? ("author" as const) : ("admin" as const), id: ctx.user.id };
+      await addOrgMember(org, str(body.login, "login", { max: 64 })!, body.role === "owner" ? "owner" : "member", actor, ctx.request);
+      return ok(orgMembersOf(org.id), 201);
+    },
+  },
+  {
+    method: "DELETE", path: "/orgs/:login/members/:authorId", auth: "user",
+    handler: async (ctx) => {
+      const org = orgOr404(ctx.params.login);
+      // Owners remove anyone; members may leave.
+      if (ctx.params.authorId !== ctx.user.id) assertOrgManager(ctx.user, org);
+      const actor = { kind: orgRole(ctx.user.id, org.id) ? ("author" as const) : ("admin" as const), id: ctx.user.id };
+      await removeOrgMember(org, ctx.params.authorId, actor, ctx.request);
+      return ok(orgMembersOf(org.id));
+    },
+  },
+  {
     method: "GET", path: "/tokens", auth: "user",
     handler: async ({ user }) => ok(tokensOf(user.id)),
   },
@@ -622,9 +658,17 @@ const adminRoutes: Route[] = [
     method: "GET", path: "/admin/authors", auth: "admin",
     handler: async ({ query }) => {
       const q = query.get("q");
-      const rows = db.select({ a: authors, n: sql<number>`(select count(*) from extension_members m where m.author_id = ${authors.id})` }).from(authors)
+      // An organization's count is the extensions it owns.
+      const rows = db.select({
+        a: authors,
+        n: sql<number>`case when ${authors.kind} = 'org' then (select count(*) from extensions e where e.author_id = ${authors.id}) else (select count(*) from extension_members m where m.author_id = ${authors.id}) end`,
+      }).from(authors)
         .where(q ? sql`${authors.githubLogin} like ${`%${q}%`}` : undefined).orderBy(desc(authors.createdAt)).limit(500).all();
-      return ok(rows.map(({ a, n }) => ({ id: a.id, login: a.githubLogin, name: a.displayName, avatarUrl: a.avatarUrl, email: a.email, role: a.role, verified: !!a.verified, bannedAt: a.bannedAt, bannedReason: a.bannedReason, createdAt: a.createdAt, extensions: n })));
+      return ok(rows.map(({ a, n }) => ({
+        id: a.id, login: a.githubLogin, name: a.displayName, avatarUrl: a.avatarUrl, email: a.email, role: a.role, kind: a.kind, verified: !!a.verified,
+        bannedAt: a.bannedAt, bannedReason: a.bannedReason, createdAt: a.createdAt, extensions: n,
+        ...(a.kind === "org" ? { members: orgMembersOf(a.id).map((m) => ({ login: m.login, role: m.role })) } : {}),
+      })));
     },
   },
   {
