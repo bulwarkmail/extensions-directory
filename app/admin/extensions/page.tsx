@@ -31,6 +31,7 @@ export default function AdminExtensions() {
                       ? <ActionButton path={`/admin/extensions/${e.slug}`} body={{ action: "unsuspend" }} label="Unsuspend" ghost small />
                       : <ActionButton path={`/admin/extensions/${e.slug}`} body={{ action: "suspend" }} label="Suspend" ghost small ask="Why? Suspending stops all downloads and withdraws open submissions." />}
                     <ActionButton path={`/admin/extensions/${e.slug}`} body={{ action: e.featured ? "unfeature" : "feature" }} label={e.featured ? "Unfeature" : "Feature"} ghost small />
+                    <ActionButton path={`/admin/extensions/${e.slug}`} body={{ action: "transfer" }} label="Transfer" ghost small ask="Transfer to which GitHub login or organization? Current members keep their access." askField="to" />
                   </div>
                 </td>
               </tr>

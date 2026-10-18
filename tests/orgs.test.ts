@@ -1,7 +1,7 @@
 // Organization owners: an org never signs in, its members manage what it
 // owns, staff transfer extensions to it, and the public sees the org.
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { seed } from "./fixtures/seed";
 import { params, req, BASE } from "./helpers/http";
 import { signIn, signOut } from "./helpers/session";
@@ -153,6 +153,38 @@ describe("people outside the org", () => {
     expect((await call("POST", "/extensions", { slug: "org-sneak", repository: "bulwarkmail/plugins", owner: "alice" })).status).toBe(403);
     expect((await call("GET", "/orgs/bulwarkmail/members")).status).toBe(404);
     expect(db.select().from(schema.extensions).where(eq(schema.extensions.slug, "org-sneak")).get()).toBeUndefined();
+  });
+});
+
+describe("transfer", () => {
+  it("is for admins only", async () => {
+    await signIn("rev");
+    expect((await call("POST", "/admin/extensions/nord", { action: "transfer", to: "bulwarkmail" })).status).toBe(403);
+    await signIn("author-bob");
+    expect((await call("POST", "/admin/extensions/nord", { action: "transfer", to: "bulwarkmail" })).status).toBe(403);
+  });
+
+  it("moves an extension to the org, keeps the old owner's access and logs it", async () => {
+    await signIn("staff");
+    expect((await call("POST", "/admin/extensions/nord", { action: "transfer", to: "nobody-here" })).status).toBe(404);
+    expect((await call("POST", "/admin/extensions/nord", { action: "transfer", to: "bulwarkmail" })).status).toBe(200);
+    expect(db.select().from(schema.extensions).where(eq(schema.extensions.slug, "nord")).get()!.authorId).toBe(ORG);
+    expect(db.select().from(schema.extensionMembers).where(eq(schema.extensionMembers.extensionId, "ext-nord")).all()).toEqual([
+      expect.objectContaining({ authorId: "author-bob", role: "owner" }),
+    ]);
+    expect(db.select().from(schema.auditLog).where(and(eq(schema.auditLog.action, "extension.transfer"), eq(schema.auditLog.targetId, "ext-nord"))).get()).toMatchObject({
+      actorKind: "admin", actorId: "staff", details: { slug: "nord", from: "bob", to: "bulwarkmail", toKind: "org" },
+    });
+    await signIn("author-bob");
+    expect((await call("GET", "/extensions/nord/manage")).status).toBe(200);
+    await signIn("max");
+    expect((await call("GET", "/extensions/nord/manage")).status).toBe(200);
+  });
+
+  it("makes a person who receives an extension its owner", async () => {
+    await signIn("staff");
+    expect((await call("POST", "/admin/extensions/draft-thing", { action: "transfer", to: "erin" })).status).toBe(200);
+    expect(db.select().from(schema.extensionMembers).where(and(eq(schema.extensionMembers.extensionId, "ext-draft"), eq(schema.extensionMembers.authorId, "erin"))).get()).toMatchObject({ role: "owner" });
   });
 });
 

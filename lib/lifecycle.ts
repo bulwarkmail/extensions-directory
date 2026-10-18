@@ -185,6 +185,29 @@ export async function removeMember(ext: Ext, authorId: string, actor: Actor, req
   await audit(actor, "member.remove", { kind: "extension", id: ext.id }, { slug: ext.slug, authorId }, request);
 }
 
+/**
+ * Staff: make another account or an organization the extension's author.
+ * Members stay, so the previous owner keeps access until removed; a person
+ * who receives it becomes an owner member.
+ */
+export async function transferExtension(ext: Ext, login: string, actor: Actor, request?: Request) {
+  const to = db.select().from(authors).where(eq(authors.githubLogin, login)).all();
+  // Logins aren't unique across renames; prefer an organization, then the newest account.
+  const target = to.find((a) => a.kind === "org") ?? to.sort((a, b) => (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0))[0];
+  if (!target) throw new HttpError(404, `${login} has not signed in to the directory yet`, "not_found");
+  if (target.bannedAt || target.banned) throw new HttpError(409, `${login} is banned`, "conflict");
+  if (target.id === ext.authorId) throw new HttpError(409, `${login} already owns ${ext.slug}`, "conflict");
+  const from = db.select({ login: authors.githubLogin }).from(authors).where(eq(authors.id, ext.authorId)).get();
+  db.$client.transaction(() => {
+    db.update(extensions).set({ authorId: target.id }).where(eq(extensions.id, ext.id)).run();
+    if (target.kind === "user") {
+      db.insert(extensionMembers).values({ extensionId: ext.id, authorId: target.id, role: "owner", addedBy: actor.id ?? null })
+        .onConflictDoUpdate({ target: [extensionMembers.extensionId, extensionMembers.authorId], set: { role: "owner" } }).run();
+    }
+  })();
+  await audit(actor, "extension.transfer", { kind: "extension", id: ext.id }, { slug: ext.slug, from: from?.login ?? ext.authorId, to: target.githubLogin, toKind: target.kind }, request);
+}
+
 export function membersOf(extensionId: string) {
   return db.select({ authorId: extensionMembers.authorId, role: extensionMembers.role, login: authors.githubLogin, name: authors.displayName, avatarUrl: authors.avatarUrl })
     .from(extensionMembers).innerJoin(authors, eq(authors.id, extensionMembers.authorId)).where(eq(extensionMembers.extensionId, extensionId)).all();

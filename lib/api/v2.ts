@@ -14,7 +14,7 @@ import { advisoriesFor, extensionBySlug, latestFor, listExtensions, mediaOf, new
 import { advisoryView, createAdvisory, handleReport, hideRating, rate, ratingsOf, removeRating, report, updateAdvisory } from "@/lib/community";
 import {
   addMember, addPublisher, banAuthor, decideTextChange, deprecate, extensionOr404, membersOf, proposeTextChange, removeMember,
-  removePublisher, setArchived, setFeatured, setMaxAppVersion, setRole, setSource, setVerified, suspend, unbanAuthor,
+  removePublisher, setArchived, setFeatured, setMaxAppVersion, setRole, setSource, setVerified, suspend, transferExtension, unbanAuthor,
   undeprecate, unsuspend, unyankVersion, yankVersion,
 } from "@/lib/lifecycle";
 import { addOrgMember, assertOrgManager, extensionsManagedBy, orgMembersOf, orgOr404, orgRole, orgsOf, removeOrgMember, reservationOwner } from "@/lib/orgs";
@@ -712,6 +712,7 @@ const adminRoutes: Route[] = [
         case "yank": await yankVersion(ext, str(body.version, "version", { max: 64 })!, str(body.reason, "reason", { max: 500 })!, actor, ctx.request); break;
         case "unyank": await unyankVersion(ext, str(body.version, "version", { max: 64 })!, actor, ctx.request); break;
         case "add-owner": await addMember(ext, str(body.login, "login", { max: 64 })!, "owner", actor, ctx.request); break;
+        case "transfer": await transferExtension(ext, str(body.to, "to", { max: 64 })!, actor, ctx.request); break;
         default: throw new HttpError(400, "Unknown action", "bad_request");
       }
       return ok({ done: body.action });
