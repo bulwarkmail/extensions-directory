@@ -1234,3 +1234,35 @@ plan above, this list wins.
 4. **Webmail follow-ups**: section 12 items 3 to 6 (notices from
    `/api/v2/updates`, ratings UI, moving to v2 routes).
 5. **Six published bundles** fail current webmail install checks (section 19).
+
+## 22. Organizations (2026-10-18)
+
+- **Model.** `authors.kind` is `user` or `org`. An org row is a GitHub
+  organization (the `bulwarkmail` org, GitHub id 266882946, is created by
+  `0004_org_owners`). It never signs in: the OAuth callback refuses its
+  GitHub id, `currentUser()` treats a session naming it as signed out, and
+  `assertActorAllowed` refuses it as an actor. `org_members(org_id,
+  author_id, role)` with `owner` or `member`.
+- **Access.** `memberRole()` gives the higher of the extension_members role
+  and the org role on the extension's owner: org owners act as owners, org
+  members as maintainers. So every path (session, token, OIDC, worker,
+  approval) treats org members like extension members. Extension members of
+  an org's extension stay as they are.
+- **API.** `POST /api/v2/extensions` takes `owner` (an org the user belongs
+  to); the reserving member gets no extension_members row, access comes from
+  the org. `GET|POST /api/v2/orgs/{login}/members`, `DELETE
+  .../{authorId}` (org owners and admins; members may leave). `POST
+  /api/v2/admin/extensions/{slug}` action `transfer` with `to` (a login or
+  org; admins): members stay, a person who receives it becomes an owner.
+  `/me` lists `organizations`; `/me/extensions` gives `organization`.
+- **Public.** Org extensions show the org as author; v2 `author` gains
+  `organization: true`, v1 keeps its keys. `/stats` counts people only.
+- **Reservations.** An org's pending names are not released after 90 days
+  (only staff create orgs). Mail to an org goes to its owners.
+- **Data.** `0004_org_owners` moves every extension of rathlinus to the org
+  (he stays an owner member and becomes org owner), sets the folder of
+  jitsi-meet and quick-notes, reserves the twelve official plugins that
+  weren't listed, and adds a trusted publisher for each org extension in
+  bulwarkmail/plugins (`.github/workflows/publish.yml`, environment
+  `extensions`, tags only). external-recipient-warning shares
+  external-mail-warning's folder and gets none.
