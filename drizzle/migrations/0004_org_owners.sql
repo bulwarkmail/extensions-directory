@@ -34,8 +34,8 @@ UPDATE `extensions` SET `subpath` = `slug`
 	WHERE `slug` IN ('jitsi-meet', 'quick-notes') AND `subpath` = '' AND lower(`github_repo`) = 'bulwarkmail/plugins';--> statement-breakpoint
 -- Reserve the official plugins that aren't listed yet (name, description and
 -- type from each folder's manifest.json on bulwarkmail/plugins main).
-INSERT INTO `extensions` (`id`, `slug`, `name`, `type`, `plugin_type`, `author_id`, `description`, `github_repo`, `subpath`, `source_host`, `status`, `reserved_at`, `created_at`, `updated_at`)
-	SELECT lower(hex(randomblob(16))), r.`slug`, r.`name`, 'plugin', r.`plugin_type`, 'e1a8f4a1-9b4e-4568-afb7-d7e1cdf6afa4', r.`description`, 'bulwarkmail/plugins', r.`slug`, 'github.com', 'pending', unixepoch(), unixepoch(), unixepoch()
+INSERT INTO `extensions` (`id`, `slug`, `name`, `type`, `plugin_type`, `author_id`, `description`, `github_repo`, `subpath`, `source_host`, `license`, `status`, `reserved_at`, `created_at`, `updated_at`)
+	SELECT lower(hex(randomblob(16))), r.`slug`, r.`name`, 'plugin', r.`plugin_type`, 'e1a8f4a1-9b4e-4568-afb7-d7e1cdf6afa4', r.`description`, 'bulwarkmail/plugins', r.`slug`, 'github.com', 'AGPL-3.0', 'pending', unixepoch(), unixepoch(), unixepoch()
 	FROM (SELECT column1 AS `slug`, column2 AS `name`, column3 AS `description`, column4 AS `plugin_type` FROM (VALUES
 		('ai-assistant', 'AI Writing Assistant', 'Write, rewrite, translate and proofread emails, and summarise messages, with an OpenAI-compatible service (OpenAI, Ollama, ...) or Anthropic. Text is only sent when you click.', 'ui-extension'),
 		('auto-tag', 'Auto Tag', 'Automatically tags incoming emails based on configurable rules', 'hook'),

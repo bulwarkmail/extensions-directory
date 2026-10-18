@@ -86,11 +86,11 @@ describe("0004_org_owners", () => {
   });
 
   it("reserves the official plugins that aren't taken, from their manifests", () => {
-    const rows = all<{ slug: string; name: string; type: string; plugin_type: string; status: string; github_repo: string; source_host: string; subpath: string; reserved_at: number | null }>(
-      "select slug, name, type, plugin_type, status, github_repo, source_host, subpath, reserved_at from extensions where author_id = ? and created_at <> 10 order by slug", ORG);
+    const rows = all<{ slug: string; name: string; type: string; plugin_type: string; status: string; github_repo: string; source_host: string; subpath: string; license: string; reserved_at: number | null }>(
+      "select slug, name, type, plugin_type, status, github_repo, source_host, subpath, license, reserved_at from extensions where author_id = ? and created_at <> 10 order by slug", ORG);
     expect(rows.map((r) => r.slug)).toEqual(NEW_SLUGS.filter((s) => s !== "timezones"));
     for (const r of rows) {
-      expect(r).toMatchObject({ type: "plugin", status: "pending", github_repo: "bulwarkmail/plugins", source_host: "github.com", subpath: r.slug });
+      expect(r).toMatchObject({ type: "plugin", status: "pending", github_repo: "bulwarkmail/plugins", source_host: "github.com", subpath: r.slug, license: "AGPL-3.0" });
       expect(r.reserved_at).toBeGreaterThan(0);
     }
     expect(rows.find((r) => r.slug === "email-to-task")).toMatchObject({ name: "Email to task", plugin_type: "ui-extension" });
