@@ -12,6 +12,8 @@ import { ratingsOf } from "@/lib/community";
 import { currentUser } from "@/lib/auth/session";
 import { source } from "@/lib/sources";
 import { RateForm, ReportForm } from "./forms";
+import { InstallButton, InstallHelp } from "@/components/install-button";
+import { installUrl } from "@/lib/connector-link";
 import type { Metadata } from "next";
 
 const firstLine = (s: string) => {
@@ -118,8 +120,9 @@ export default async function ExtensionDetailPage({ params }: Props) {
             ) : null}
             <p className="bw-lead">{extension.description}</p>
             <div className="bw-btns">
+              {latestVersion ? <InstallButton slug={extension.slug} /> : null}
               {latestVersion ? (
-                <a href={`${siteUrl}/api/v1/bundle/${extension.slug}/${latestVersion.version}`} className="bw-btn">
+                <a href={`${siteUrl}/api/v1/bundle/${extension.slug}/${latestVersion.version}`} className="bw-btn bw-btn-ghost">
                   Download version {latestVersion.version}
                   <Download size={16} {...ICON} />
                 </a>
@@ -131,6 +134,7 @@ export default async function ExtensionDetailPage({ params }: Props) {
                 </a>
               ) : null}
             </div>
+            {latestVersion ? <InstallHelp /> : null}
           </div>
           {extension.bannerPath ? (
             <span className="dx-banner">
@@ -195,7 +199,7 @@ export default async function ExtensionDetailPage({ params }: Props) {
                           Size
                         </th>
                         <th scope="col">
-                          <span className="sr-only">Download</span>
+                          <span className="sr-only">Actions</span>
                         </th>
                       </tr>
                     </thead>
@@ -209,7 +213,11 @@ export default async function ExtensionDetailPage({ params }: Props) {
                           <td className="num" style={{ whiteSpace: "nowrap" }}>
                             {formatBytes(v.bundleSize)}
                           </td>
-                          <td>
+                          <td className="dx-rowact" style={{ whiteSpace: "nowrap" }}>
+                            <a className="bw-link" href={installUrl(extension.slug, v.version)}>
+                              Install<span className="sr-only"> version {v.version} on your Bulwark</span>
+                            </a>
+                            {" · "}
                             <a className="bw-link" href={`${siteUrl}/api/v1/bundle/${extension.slug}/${v.version}`}>
                               Download<span className="sr-only"> version {v.version}</span>
                             </a>

@@ -9,6 +9,7 @@ import { formatBytes, formatDate } from "@/lib/utils";
 import { PermissionList } from "@/components/permission-badge";
 import { Status } from "@/components/status";
 import { ICON } from "@/components/icon";
+import { InstallButton, InstallHelp } from "@/components/install-button";
 
 interface Props {
   params: Promise<{ slug: string; version: string }>;
@@ -47,8 +48,10 @@ export default async function VersionPage({ params }: Props) {
       {v.yankedAt ? <p className="bw-note bw-note-warning">This version was yanked{v.yankReason ? `: ${v.yankReason}` : "."} It is no longer offered for new installs.</p> : null}
       {advisories.map((a) => <p key={a.id} className="bw-note bw-note-warning"><strong>{a.id} ({a.severity})</strong>: {a.summary}{a.fixedIn ? ` Fixed in ${a.fixedIn}.` : ""}</p>)}
       <div className="bw-btns">
-        <a className="bw-btn" href={`/api/v1/bundle/${slug}/${encodeURIComponent(v.version)}`}>Download <Download size={16} {...ICON} /></a>
+        <InstallButton slug={slug} version={v.version} />
+        <a className="bw-btn bw-btn-ghost" href={`/api/v1/bundle/${slug}/${encodeURIComponent(v.version)}`}>Download <Download size={16} {...ICON} /></a>
       </div>
+      <InstallHelp />
 
       <section className="dx-sec-block">
         <h2 className="dx-h2">Where it came from</h2>

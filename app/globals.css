@@ -1069,6 +1069,23 @@ textarea.bw-input {
     padding-bottom: 76px;
   }
 }
+/* The Install button sits where the tile's arrow would be. It is a sibling of
+   the tile (a link may not hold a link), so the wrapper positions it. */
+.dx-card-wrap {
+  position: relative;
+  display: grid;
+}
+.dx-card-wrap > .bw-tile {
+  height: 100%;
+}
+.dx-card-install {
+  position: absolute;
+  right: var(--bw-tile-pad);
+  bottom: calc(var(--bw-tile-pad) - 4px);
+}
+.dx-card-wrap .dx-meta {
+  right: 120px;
+}
 
 /* The author's icon is shown as they drew it, with no frame. An extension
    without one gets a plain square with its initial in the text colour. */

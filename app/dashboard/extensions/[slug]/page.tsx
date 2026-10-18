@@ -10,6 +10,7 @@ import { SignInPrompt } from "@/components/sign-in-prompt";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { ActionButton, ActionForm } from "@/components/client/action";
 import { SubmitVersionForm } from "./submit-form";
+import { installBadgeMarkdown, installUrl } from "@/lib/connector-link";
 
 export const metadata: Metadata = { title: "Manage extension" };
 export const dynamic = "force-dynamic";
@@ -190,6 +191,15 @@ jobs:
           { name: "description", label: "One-line description", defaultValue: ext.description },
           { name: "longDescription", label: "Long description (Markdown)", type: "textarea", optional: true, defaultValue: ext.longDescription ?? "", rows: 10 },
         ]} />
+      </section>
+
+      <section className="dx-sec-block">
+        <h2 className="dx-h2">Install link</h2>
+        <p>
+          <a className="bw-link" href={installUrl(ext.slug)}>{installUrl(ext.slug)}</a> opens this extension in the marketplace of the reader&apos;s own Bulwark.
+          Put it in your README as a badge:
+        </p>
+        <pre className="bw-code"><code>{installBadgeMarkdown(ext.slug)}</code></pre>
       </section>
 
       <section className="dx-sec-block">

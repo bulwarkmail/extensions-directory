@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, Star } from "lucide-react";
+import { BadgeCheck, Star } from "lucide-react";
 import { formatDownloads } from "@/lib/utils";
 import { ExtIcon, formatDownloadCount, formatTypeLabel } from "@/components/ext-icon";
 import { ICON } from "@/components/icon";
+import { InstallButton } from "@/components/install-button";
 
 export interface ExtensionCardProps {
   slug: string;
@@ -22,8 +23,9 @@ export interface ExtensionCardProps {
 
 /**
  * A shared-edge tile: icon, name, author, one line of description, then the
- * type, the downloads and "Featured" in words, and the arrow bottom-right.
- * The whole tile is one link, so it holds no other link or button.
+ * type, the downloads and "Featured" in words. The whole tile is one link,
+ * so it holds no other link or button; the Install button that sits in its
+ * bottom-right corner is a sibling, laid over the tile by `.dx-card-wrap`.
  */
 export function ExtensionCard({
   slug,
@@ -38,6 +40,7 @@ export function ExtensionCard({
 }: ExtensionCardProps) {
   const downloads = totalDownloads ?? 0;
   return (
+    <div className="dx-card-wrap">
     <Link href={`/extension/${slug}`} className="bw-tile dx-card">
       <ExtIcon name={name} iconPath={iconPath} />
       <span className="bw-tile-title">{name}</span>
@@ -63,9 +66,8 @@ export function ExtensionCard({
           </span>
         ) : null}
       </span>
-      <span className="bw-tile-arrow">
-        <ArrowRight size={20} {...ICON} />
-      </span>
     </Link>
+    <InstallButton slug={slug} small label="Install" className="dx-card-install" />
+    </div>
   );
 }

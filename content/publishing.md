@@ -116,3 +116,15 @@ From the extension's page in the dashboard you can:
 - add maintainers and see downloads per version.
 
 Versions with a pre-release part, like `1.3.0-beta.1`, are published on the beta channel, which webmails only see when an admin turns it on.
+
+## Install links and badges
+
+Every extension page and every version has an **Install on your Bulwark** button. It links to the Bulwark Connector (`connector.bulwarkmail.org`), which opens the extension's marketplace page on the reader's own Bulwark; admins install from there. The connector keeps the reader's server address in their browser only and never sees where a link goes.
+
+You can put the same link in your README:
+
+```markdown
+[![Install in Bulwark](https://connector.bulwarkmail.org/badges/admin_extension.svg)](https://connector.bulwarkmail.org/admin_extension?slug=YOUR-SLUG)
+```
+
+Add `&version=1.2.0` to offer one version instead of the newest. The extension's page in the dashboard shows the snippet with your slug filled in.
