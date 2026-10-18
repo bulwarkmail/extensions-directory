@@ -43,6 +43,7 @@ beforeEach(() => {
       [sha(31)]: Object.fromEntries(Object.entries(plainPlugin("jitsi-meet", "3.0.0")).map(([k, v]) => [`jitsi-meet/${k}`, v])),
       [sha(32)]: Object.fromEntries(Object.entries(plainPlugin("jitsi-meet", "3.0.1")).map(([k, v]) => [`jitsi-meet/${k}`, v])),
       [sha(33)]: Object.fromEntries(Object.entries(plainPlugin("jitsi-meet", "3.0.2")).map(([k, v]) => [`jitsi-meet/${k}`, v])),
+      [sha(34)]: Object.fromEntries(Object.entries(plainPlugin("jitsi-meet", "3.0.3")).map(([k, v]) => [`jitsi-meet/${k}`, v])),
     },
   });
 });
@@ -90,6 +91,15 @@ describe("POST /api/v2/publish with a GitHub OIDC token", () => {
     const res = await publish(await token({ sha: sha(32) }));
     const { data } = await res.json();
     expect(data).toMatchObject({ version: "3.0.1", source: { commit: sha(32) } });
+  });
+
+  it("accepts a monorepo tag with an @ in it", async () => {
+    const res = await publish(await token({
+      workflow_ref: "alice/plugins/.github/workflows/publish.yml@refs/tags/jitsi-meet@3.0.3", ref: "refs/tags/jitsi-meet@3.0.3", sha: sha(34),
+    }));
+    const body = await res.json();
+    expect({ status: res.status, code: body.error?.code }).toEqual({ status: 202, code: undefined });
+    expect(body.data).toMatchObject({ slug: "jitsi-meet", version: "3.0.3", source: { ref: "refs/tags/jitsi-meet@3.0.3" } });
   });
 
   it.each([

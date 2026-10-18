@@ -87,11 +87,15 @@ export async function verifyGithubToken(token: string, now = Date.now()): Promis
 }
 
 /** ".github/workflows/publish.yml" from "owner/repo/.github/workflows/publish.yml@refs/tags/v1". */
-export function workflowPath(claims: Pick<GithubClaims, "workflow_ref" | "repository">): string | null {
+export function workflowPath(claims: Pick<GithubClaims, "workflow_ref" | "repository" | "ref">): string | null {
   const prefix = `${claims.repository}/`;
   if (!claims.workflow_ref.startsWith(prefix)) return null;
   const rest = claims.workflow_ref.slice(prefix.length);
-  const at = rest.lastIndexOf("@");
+  // The ref can hold an "@" itself (monorepo tags like "smime@1.3.1"), so cut
+  // off the run's own ref rather than splitting at the last "@".
+  const suffix = `@${claims.ref}`;
+  if (claims.ref && rest.endsWith(suffix)) return rest.length > suffix.length ? rest.slice(0, -suffix.length) : null;
+  const at = rest.indexOf("@");
   return at > 0 ? rest.slice(0, at) : null;
 }
 
