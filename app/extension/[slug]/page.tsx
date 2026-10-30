@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowUpRight, BadgeCheck, Download } from "lucide-react";
+import { BadgeCheck, Download } from "lucide-react";
 import { getExtensionBySlug } from "@/lib/db/queries";
 import { PermissionList } from "@/components/permission-badge";
 import { ExtIcon, formatTypeLabel } from "@/components/ext-icon";
@@ -20,6 +20,54 @@ const firstLine = (s: string) => {
   const line = s.split(/\r?\n/).map((l) => l.replace(/^[#*\-\s]+/, "").trim()).find(Boolean) ?? "";
   return line.length > 140 ? `${line.slice(0, 140)}…` : line;
 };
+
+// Older versions fold away under the table.
+const RECENT_VERSIONS = 5;
+
+type VersionRow = NonNullable<Awaited<ReturnType<typeof getExtensionBySlug>>>["versions"][number];
+
+/** Version, date, the first line of its notes, size, and Install / Download. */
+function VersionTable({ rows, slug, siteUrl }: { rows: VersionRow[]; slug: string; siteUrl: string }) {
+  return (
+    <div className="bw-table-wrap">
+      <table className="bw-table dx-versions">
+        <thead>
+          <tr>
+            <th scope="col">Version</th>
+            <th scope="col">Released</th>
+            <th scope="col" className="dx-hide-sm">Notes</th>
+            <th scope="col" className="num dx-hide-sm">Size</th>
+            <th scope="col">
+              <span className="sr-only">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((v) => (
+            <tr key={v.id}>
+              <td>
+                <Link className="bw-link" href={`/extension/${slug}/versions/${encodeURIComponent(v.version)}`}>
+                  {v.version}
+                </Link>
+              </td>
+              <td className="dx-nowrap">{formatDate(v.publishedAt)}</td>
+              <td className="dx-hide-sm">{v.changelog ? firstLine(v.changelog) : <span className="bw-muted">No notes</span>}</td>
+              <td className="num dx-nowrap dx-hide-sm">{formatBytes(v.bundleSize)}</td>
+              <td className="dx-rowact dx-nowrap">
+                <a className="bw-link" href={installUrl(slug, v.version)}>
+                  Install<span className="sr-only"> version {v.version} on your Bulwark</span>
+                </a>
+                <a className="bw-link" href={`${siteUrl}/api/v1/bundle/${slug}/${v.version}`}>
+                  Download<span className="sr-only"> version {v.version}</span>
+                </a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -111,30 +159,34 @@ export default async function ExtensionDetailPage({ params }: Props) {
               <p className="dx-byline">
                 by <Link href={`/author/${extension.author.githubLogin}`}>{extension.author.displayName}</Link>
                 {extension.author.verified ? (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+                  <span className="dx-verified">
                     <BadgeCheck size={16} {...ICON} />
                     verified author
                   </span>
                 ) : null}
               </p>
             ) : null}
-            <p className="bw-lead">{extension.description}</p>
-            <div className="bw-btns">
-              {latestVersion ? <InstallButton slug={extension.slug} /> : null}
-              {latestVersion ? (
-                <a href={`${siteUrl}/api/v1/bundle/${extension.slug}/${latestVersion.version}`} className="bw-btn bw-btn-ghost">
-                  Download version {latestVersion.version}
-                  <Download size={16} {...ICON} />
-                </a>
-              ) : null}
-              {repo ? (
-                <a href={repo.href} target="_blank" rel="noopener noreferrer" className="bw-btn bw-btn-ghost">
-                  View source
-                  <ArrowUpRight size={16} {...ICON} />
-                </a>
-              ) : null}
-            </div>
-            {latestVersion ? <InstallHelp /> : null}
+            <ul className="dx-hero-facts">
+              <li>{typeLabel}</li>
+              {latestVersion ? <li>Version {latestVersion.version}</li> : null}
+              <li>
+                {formatDownloads(extension.totalDownloads ?? 0)} {(extension.totalDownloads ?? 0) === 1 ? "download" : "downloads"}
+              </li>
+              {extension.minAppVersion ? <li>Bulwark {extension.minAppVersion} or later</li> : null}
+            </ul>
+            <p className="dx-dhero-desc">{extension.description}</p>
+            {latestVersion ? (
+              <>
+                <div className="bw-btns">
+                  <InstallButton slug={extension.slug} />
+                  <a href={`${siteUrl}/api/v1/bundle/${extension.slug}/${latestVersion.version}`} className="bw-btn bw-btn-ghost">
+                    Download
+                    <Download size={16} {...ICON} />
+                  </a>
+                </div>
+                <InstallHelp className="dx-dhero-help" />
+              </>
+            ) : null}
           </div>
           {extension.bannerPath ? (
             <span className="dx-banner">
@@ -160,7 +212,7 @@ export default async function ExtensionDetailPage({ params }: Props) {
         ))}
         <div className="dx-split">
           <div className="dx-stack">
-            {extension.longDescription ? (
+            {extension.longDescription && extension.longDescription.trim() !== extension.description.trim() ? (
               <section>
                 <h2 className="dx-h2">About</h2>
                 <div className="ext-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(extension.longDescription) }} />
@@ -184,49 +236,29 @@ export default async function ExtensionDetailPage({ params }: Props) {
               </section>
             ) : null}
 
+            {latestVersion?.changelog ? (
+              <section>
+                <div className="dx-h2-row">
+                  <h2 className="dx-h2">What&apos;s new in {latestVersion.version}</h2>
+                  {latestVersion.publishedAt ? <span className="bw-muted">{formatDate(latestVersion.publishedAt)}</span> : null}
+                </div>
+                <div className="ext-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(latestVersion.changelog) }} />
+              </section>
+            ) : null}
+
             {extension.versions.length > 0 ? (
               <section>
                 <h2 className="dx-h2">Versions</h2>
-                <div className="bw-table-wrap">
-                  <table className="bw-table">
-                    <thead>
-                      <tr>
-                        <th scope="col">Version</th>
-                        <th scope="col">Released</th>
-                        <th scope="col">Changes</th>
-                        <th scope="col">Built from</th>
-                        <th scope="col" className="num">
-                          Size
-                        </th>
-                        <th scope="col">
-                          <span className="sr-only">Actions</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {extension.versions.map((v) => (
-                        <tr key={v.id}>
-                          <td><Link className="bw-link" href={`/extension/${extension.slug}/versions/${encodeURIComponent(v.version)}`}>{v.version}</Link></td>
-                          <td style={{ whiteSpace: "nowrap" }}>{formatDate(v.publishedAt)}</td>
-                          <td>{v.changelog ? firstLine(v.changelog) : "No notes"}</td>
-                          <td>{v.sourceCommit ? <code className="bw-icode">{v.sourceCommit.slice(0, 7)}</code> : <span className="bw-muted">{v.sourceRef ?? ""}</span>}{v.signature ? " ✓ signed" : ""}</td>
-                          <td className="num" style={{ whiteSpace: "nowrap" }}>
-                            {formatBytes(v.bundleSize)}
-                          </td>
-                          <td className="dx-rowact" style={{ whiteSpace: "nowrap" }}>
-                            <a className="bw-link" href={installUrl(extension.slug, v.version)}>
-                              Install<span className="sr-only"> version {v.version} on your Bulwark</span>
-                            </a>
-                            {" · "}
-                            <a className="bw-link" href={`${siteUrl}/api/v1/bundle/${extension.slug}/${v.version}`}>
-                              Download<span className="sr-only"> version {v.version}</span>
-                            </a>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <VersionTable rows={extension.versions.slice(0, RECENT_VERSIONS)} slug={extension.slug} siteUrl={siteUrl} />
+                {extension.versions.length > RECENT_VERSIONS ? (
+                  <details className="dx-details dx-older">
+                    <summary>
+                      {extension.versions.length - RECENT_VERSIONS} older{" "}
+                      {extension.versions.length - RECENT_VERSIONS === 1 ? "version" : "versions"}
+                    </summary>
+                    <VersionTable rows={extension.versions.slice(RECENT_VERSIONS)} slug={extension.slug} siteUrl={siteUrl} />
+                  </details>
+                ) : null}
               </section>
             ) : null}
             <section>
@@ -247,7 +279,7 @@ export default async function ExtensionDetailPage({ params }: Props) {
             </section>
           </div>
 
-          <aside className="dx-stack" style={{ gap: 40 }}>
+          <aside className="dx-stack dx-aside">
             <section>
               <h2 className="dx-h2">Details</h2>
               <dl className="bw-deflist">

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { ALLOWED_TAGS } from "@/lib/utils";
 import { ICON } from "@/components/icon";
 
@@ -14,28 +14,31 @@ const tagLabel = (t: string) => TAG_LABELS[t] ?? t.charAt(0).toUpperCase() + t.s
 
 const SORTS = [
   { value: "newest", label: "Newest" },
-  { value: "updated", label: "Recently updated" },
-  { value: "downloads", label: "Most downloaded" },
+  { value: "updated", label: "Updated" },
+  { value: "downloads", label: "Downloads" },
   { value: "name", label: "Name" },
 ];
 
-/** The search form under the home page field: an input and a Search button. */
-export function SearchBar({ placeholder = "Search plugins and themes" }: { placeholder?: string }) {
+/**
+ * The search form: an input and a Search button. `onField` is the large one
+ * in the home page header, a white input with an ink button on the field.
+ */
+export function SearchBar({ placeholder = "Search plugins and themes", onField = false }: { placeholder?: string; onField?: boolean }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
 
   return (
     <form
       role="search"
-      className="dx-searchform"
+      className={`dx-searchform${onField ? " dx-searchform-field" : ""}`}
       onSubmit={(e) => {
         e.preventDefault();
         const trimmed = query.trim();
-        if (trimmed) router.push(`/search?q=${encodeURIComponent(trimmed)}`);
+        router.push(trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : "/search");
       }}
     >
       <div className="dx-search">
-        <Search size={16} {...ICON} />
+        <Search size={18} {...ICON} />
         <label htmlFor="home-search" className="sr-only">
           {placeholder}
         </label>
@@ -58,12 +61,12 @@ export function SearchBar({ placeholder = "Search plugins and themes" }: { place
 export type BrowseKind = "plugins" | "themes" | "search";
 
 /**
- * The toolbar under the field on /plugins, /themes and /search: the type as a
- * segmented control, then one GET form with the search input and sort and
- * tag as native selects. Changing a select does not navigate on its own (a
- * change of context on input fails WCAG 3.2.2 for keyboard users); Enter in
- * the search field or "Show results" applies everything and returns to
- * page 1. The form also works without JavaScript.
+ * The toolbar under the field on /plugins, /themes and /search. First row:
+ * the type as a segmented control and the search field (Enter searches and
+ * keeps the sort and tag). Second row: the tags as chips and the sort as a
+ * segmented control. Tags and sort are links, so each choice applies at once
+ * and the page never changes just because a control changed (WCAG 3.2.2).
+ * Everything works without JavaScript.
  */
 export function BrowseToolbar({
   kind,
@@ -84,6 +87,7 @@ export function BrowseToolbar({
     const p = new URLSearchParams();
     const merged: Record<string, string> = { q, sort, tag, type, ...changes };
     if (path !== "/search") delete merged.type;
+    if (merged.sort === "newest") delete merged.sort;
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `${path}?${s}` : path;
@@ -102,19 +106,22 @@ export function BrowseToolbar({
         ];
 
   const noun = kind === "plugins" ? "plugins" : kind === "themes" ? "themes" : "plugins and themes";
+  const tags = [...ALLOWED_TAGS, ...(tag && !(ALLOWED_TAGS as readonly string[]).includes(tag) ? [tag] : [])];
 
   return (
     <div className="dx-toolbar">
-      <nav className="bw-switch" aria-label="Type">
-        {types.map((t) => (
-          <Link key={t.label} href={t.to} className="bw-switch-option" aria-current={t.on ? "page" : undefined}>
-            {t.label}
-          </Link>
-        ))}
-      </nav>
-      <form role="search" method="get" action={base} className="dx-toolbar-form">
-        {kind === "search" && type ? <input type="hidden" name="type" value={type} /> : null}
-        <div className="dx-search">
+      <div className="dx-toolbar-row">
+        <nav className="bw-switch" aria-label="Type">
+          {types.map((t) => (
+            <Link key={t.label} href={t.to} className="bw-switch-option" aria-current={t.on ? "page" : undefined}>
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+        <form role="search" method="get" action={base} className="dx-search">
+          {kind === "search" && type ? <input type="hidden" name="type" value={type} /> : null}
+          {sort && sort !== "newest" ? <input type="hidden" name="sort" value={sort} /> : null}
+          {tag ? <input type="hidden" name="tag" value={tag} /> : null}
           <Search size={16} {...ICON} />
           <label htmlFor={`search-${kind}`} className="sr-only">
             Search {noun}
@@ -128,33 +135,41 @@ export function BrowseToolbar({
             placeholder={`Search ${noun}`}
             autoFocus={kind === "search" && !q}
           />
-        </div>
-        <label htmlFor={`sort-${kind}`} className="sr-only">
-          Sort
-        </label>
-        <select id={`sort-${kind}`} name="sort" className="bw-input" defaultValue={sort}>
-          {SORTS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        <label htmlFor={`tag-${kind}`} className="sr-only">
-          Tag
-        </label>
-        <select id={`tag-${kind}`} name="tag" className="bw-input" defaultValue={tag}>
-          <option value="">All tags</option>
-          {ALLOWED_TAGS.map((t) => (
-            <option key={t} value={t}>
+          {q ? (
+            <Link href={href(base, { q: "" })} className="dx-search-clear" aria-label="Clear the search">
+              <X size={16} {...ICON} />
+            </Link>
+          ) : null}
+        </form>
+        <nav className="dx-sort" aria-label="Sort">
+          <span className="dx-sort-label" aria-hidden="true">Sort</span>
+          <span className="bw-switch">
+            {SORTS.map((s) => (
+              <Link
+                key={s.value}
+                href={href(base, { sort: s.value })}
+                className="bw-switch-option"
+                aria-current={(sort || "newest") === s.value ? "page" : undefined}
+                aria-label={`Sort by ${s.label.toLowerCase()}`}
+              >
+                {s.label}
+              </Link>
+            ))}
+          </span>
+        </nav>
+      </div>
+      <div className="dx-toolbar-row">
+        <nav className="dx-chips" aria-label="Tag">
+          <Link href={href(base, { tag: "" })} aria-current={!tag ? "page" : undefined}>
+            All
+          </Link>
+          {tags.map((t) => (
+            <Link key={t} href={href(base, { tag: t })} aria-current={tag === t ? "page" : undefined}>
               {tagLabel(t)}
-            </option>
+            </Link>
           ))}
-          {tag && !(ALLOWED_TAGS as readonly string[]).includes(tag) ? <option value={tag}>{tagLabel(tag)}</option> : null}
-        </select>
-        <button type="submit" className="bw-btn bw-btn-ghost">
-          Show results
-        </button>
-      </form>
+        </nav>
+      </div>
     </div>
   );
 }

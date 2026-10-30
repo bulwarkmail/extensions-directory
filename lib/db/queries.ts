@@ -67,6 +67,10 @@ export async function getPopularExtensions(limit = 12) {
   return listed(desc(extensions.totalDownloads), limit);
 }
 
+export async function getUpdatedExtensions(limit = 12) {
+  return listed(desc(extensions.updatedAt), limit);
+}
+
 export async function getStats() {
   const one = (q: ReturnType<typeof sql>) => (db.get(q) as { n: number }).n;
   return {

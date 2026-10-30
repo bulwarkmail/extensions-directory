@@ -22,10 +22,12 @@ export interface ExtensionCardProps {
 }
 
 /**
- * A shared-edge tile: icon, name, author, one line of description, then the
- * type, the downloads and "Featured" in words. The whole tile is one link,
- * so it holds no other link or button; the Install button that sits in its
- * bottom-right corner is a sibling, laid over the tile by `.dx-card-wrap`.
+ * A shared-edge tile: icon beside the name and author, two lines of
+ * description, then a footer with the type, downloads and "Featured" and a
+ * quiet Install button. The name is the tile's link and stretches over the
+ * whole tile, so the tile opens on a click anywhere while Install stays a
+ * separate control. The footer is in the flow, so a long footer wraps
+ * instead of running into the description.
  */
 export function ExtensionCard({
   slug,
@@ -37,37 +39,47 @@ export function ExtensionCard({
   author,
   totalDownloads,
   featured,
-}: ExtensionCardProps) {
+  headingLevel = 3,
+}: ExtensionCardProps & { headingLevel?: 2 | 3 }) {
   const downloads = totalDownloads ?? 0;
+  const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
-    <div className="dx-card-wrap">
-    <Link href={`/extension/${slug}`} className="bw-tile dx-card">
-      <ExtIcon name={name} iconPath={iconPath} />
-      <span className="bw-tile-title">{name}</span>
-      {author ? (
-        <span className="dx-by">
-          {author.displayName}
-          {author.verified ? (
-            <span title="Verified author">
-              <BadgeCheck size={16} {...ICON} />
-              <span className="sr-only">, verified author</span>
+    <div className="bw-tile dx-card">
+      <div className="dx-card-head">
+        <ExtIcon name={name} iconPath={iconPath} />
+        <div className="dx-card-name">
+          <Heading className="bw-tile-title">
+            <Link href={`/extension/${slug}`} className="dx-card-link">
+              {name}
+            </Link>
+          </Heading>
+          {author ? (
+            <span className="dx-by">
+              {author.displayName}
+              {author.verified ? (
+                <span title="Verified author">
+                  <BadgeCheck size={14} {...ICON} />
+                  <span className="sr-only">, verified author</span>
+                </span>
+              ) : null}
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <p className="bw-tile-text">{description}</p>
+      <div className="dx-card-foot">
+        <span className="dx-meta">
+          <span>{formatTypeLabel(type, pluginType)}</span>
+          <span>{formatDownloadCount(downloads, formatDownloads(downloads))}</span>
+          {featured ? (
+            <span className="dx-feat">
+              <Star size={14} {...ICON} />
+              Featured
             </span>
           ) : null}
         </span>
-      ) : null}
-      <span className="bw-tile-text">{description}</span>
-      <span className="dx-meta">
-        <span>{formatTypeLabel(type, pluginType)}</span>
-        <span>{formatDownloadCount(downloads, formatDownloads(downloads))}</span>
-        {featured ? (
-          <span className="dx-feat">
-            <Star size={16} {...ICON} />
-            Featured
-          </span>
-        ) : null}
-      </span>
-    </Link>
-    <InstallButton slug={slug} small label="Install" className="dx-card-install" />
+        <InstallButton slug={slug} small ghost label="Install" className="dx-card-install" ariaLabel={`Install ${name} on your Bulwark`} />
+      </div>
     </div>
   );
 }

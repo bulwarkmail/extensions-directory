@@ -15,6 +15,7 @@ export function InstallButton({
   small,
   label,
   className,
+  ariaLabel,
 }: {
   slug: string;
   version?: string | null;
@@ -22,12 +23,15 @@ export function InstallButton({
   small?: boolean;
   label?: string;
   className?: string;
+  /** For a short label repeated on a page ("Install" on every tile). */
+  ariaLabel?: string;
 }) {
   const classes = ["bw-btn", ghost ? "bw-btn-ghost" : "", small ? "bw-btn-sm" : "", className ?? ""].filter(Boolean).join(" ");
   const text = label ?? (version ? `Install version ${version}` : "Install on your Bulwark");
   return (
     <a
       className={classes}
+      aria-label={ariaLabel}
       href={installUrl(slug, version)}
       title={`Opens the marketplace of your own Bulwark through ${connectorHost()}`}
     >
@@ -38,11 +42,11 @@ export function InstallButton({
 }
 
 /** The one-line explanation under an Install button. */
-export function InstallHelp() {
+export function InstallHelp({ className }: { className?: string }) {
   return (
-    <p className="bw-help">
-      Install opens the marketplace of your own Bulwark. The link goes through {connectorHost()}, which keeps your
-      server address in your browser only.
+    <p className={`bw-help${className ? ` ${className}` : ""}`}>
+      Install opens the marketplace on your own Bulwark, through {connectorHost()}. Your server address stays in your
+      browser.
     </p>
   );
 }

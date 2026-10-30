@@ -5,7 +5,8 @@ import { ExtensionGrid } from "@/components/extension-grid";
 import { Pager } from "@/components/pager";
 import { ICON } from "@/components/icon";
 
-const PER_PAGE = 24;
+// Divisible by the three and two columns of the grid.
+const PER_PAGE = 36;
 
 const SORT_PHRASE: Record<string, string> = {
   newest: "newest first",
@@ -74,9 +75,18 @@ export async function BrowseListing({
           {meta.total.toLocaleString()} {plural(meta.total)}
           {params.q ? ` matching “${params.q}”` : ""}
           {params.tag ? ` tagged “${params.tag}”` : ""}, {SORT_PHRASE[sort] ?? SORT_PHRASE.newest}
+          {filtered ? (
+            <>
+              {" "}
+              <Link href={path} className="bw-link">
+                Clear the search and filters
+              </Link>
+            </>
+          ) : null}
         </p>
       ) : null}
       <ExtensionGrid
+        headingLevel={2}
         extensions={data}
         emptyTitle={emptyTitle}
         emptyMessage={emptyMessage}

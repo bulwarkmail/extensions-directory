@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, CircleCheck, Eye, Github, Palette, Puzzle, Shield } from "lucide-react";
+import { ArrowRight, ArrowUpRight, CircleCheck, Eye, Github, Shield } from "lucide-react";
 
 import { SearchBar } from "@/components/search-bar";
 import { ExtensionGrid } from "@/components/extension-grid";
-import { PageHeader } from "@/components/page-header";
+import { ExtensionRows } from "@/components/extension-rows";
 import { ICON } from "@/components/icon";
+import { formatDownloads, timeAgo } from "@/lib/utils";
 import {
   getFeaturedExtensions,
-  getRecentExtensions,
+  getUpdatedExtensions,
   getPopularExtensions,
   getStats,
 } from "@/lib/db/queries";
@@ -16,39 +17,10 @@ import {
 // stats appear immediately.
 export const dynamic = "force-dynamic";
 
-// Six per section keeps the three-column grid full.
-const PER_SECTION = 6;
-
 type Listing = Awaited<ReturnType<typeof getFeaturedExtensions>>;
 
-function ListingSection({
-  title,
-  link,
-  href,
-  extensions,
-}: {
-  title: string;
-  link: string;
-  href: string;
-  extensions: Listing;
-}) {
-  if (extensions.length === 0) return null;
-  return (
-    <section className="bw-w dx-sec">
-      <div className="dx-sec-head">
-        <h2 className="bw-h2">{title}</h2>
-        <Link href={href} className="bw-tlink">
-          {link}
-          <ArrowRight size={16} {...ICON} />
-        </Link>
-      </div>
-      <ExtensionGrid extensions={extensions} />
-    </section>
-  );
-}
-
 const FACTS = [
-  { icon: Github, title: "Open source only", text: "Each extension has an OSI licence and a public GitHub repository." },
+  { icon: Github, title: "Open source only", text: "Each extension has an OSI licence and a public repository." },
   { icon: CircleCheck, title: "Reviewed before release", text: "An automated scan and a reviewer check every version." },
   { icon: Eye, title: "Readable code", text: "No minified or obfuscated code, and no telemetry." },
   { icon: Shield, title: "Permissions up front", text: "Each plugin lists what it can read and change." },
@@ -66,30 +38,42 @@ const BUILD = [
     href: "https://bulwarkmail.org/docs/extensions/guidelines",
   },
   {
-    title: "Submit an extension",
-    text: "Sign in with GitHub, name a public repository and a tag.",
-    href: "/submit",
+    title: "Publish an extension",
+    text: "Push a tag from GitHub Actions, or name a repository and a tag here.",
+    href: "/publishing",
   },
 ];
 
+function SectionHead({ title, link, href }: { title: string; link: string; href: string }) {
+  return (
+    <div className="dx-sec-head">
+      <h2 className="bw-h2">{title}</h2>
+      <Link href={href} className="bw-tlink">
+        {link}
+        <ArrowRight size={16} {...ICON} />
+      </Link>
+    </div>
+  );
+}
+
 export default async function HomePage() {
   let featured: Listing = [];
-  let recent: Listing = [];
+  let updated: Listing = [];
   let popular: Listing = [];
   let stats = { extensions: 0, plugins: 0, themes: 0, authors: 0, totalDownloads: 0 };
 
   try {
-    [featured, recent, popular, stats] = await Promise.all([
-      getFeaturedExtensions(PER_SECTION),
-      getRecentExtensions(PER_SECTION),
-      getPopularExtensions(PER_SECTION),
+    [featured, updated, popular, stats] = await Promise.all([
+      getFeaturedExtensions(6),
+      getUpdatedExtensions(6),
+      getPopularExtensions(6),
       getStats(),
     ]);
   } catch {
     // DB not available — render the empty state
   }
 
-  const isEmpty = featured.length === 0 && recent.length === 0 && popular.length === 0;
+  const isEmpty = featured.length === 0 && updated.length === 0 && popular.length === 0;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -104,27 +88,33 @@ export default async function HomePage() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      <PageHeader
-        title="Plugins and themes for Bulwark Webmail."
-        description="Every extension here is free, open source and reviewed before it is published. Download the bundle and install it from the ZIP."
-      >
-        <Link href="/plugins" className="bw-btn">
-          Browse plugins
-          <ArrowRight size={16} {...ICON} />
-        </Link>
-        <Link href="/submit" className="bw-btn bw-btn-ghost">
-          Submit an extension
-          <ArrowRight size={16} {...ICON} />
-        </Link>
-      </PageHeader>
+      <section className="bw-field">
+        <div className="bw-w dx-hero dx-home-hero">
+          <h1 className="bw-h1">Plugins and themes for Bulwark Webmail.</h1>
+          <p className="bw-lead">
+            Every extension is free, open source and reviewed before it is published. Install it on your own Bulwark
+            from here.
+          </p>
+          <SearchBar onField />
+          <p className="dx-hero-links">
+            <Link href="/plugins">
+              {stats.plugins.toLocaleString()} {stats.plugins === 1 ? "plugin" : "plugins"}
+              <ArrowRight size={16} {...ICON} />
+            </Link>
+            <Link href="/themes">
+              {stats.themes.toLocaleString()} {stats.themes === 1 ? "theme" : "themes"}
+              <ArrowRight size={16} {...ICON} />
+            </Link>
+          </p>
+        </div>
+      </section>
 
-      <section className="bw-w" style={{ paddingTop: 40 }}>
-        <SearchBar />
-        <div className="bw-facts" style={{ marginTop: 56 }}>
+      <section className="bw-w dx-facts-row">
+        <div className="bw-facts">
           {FACTS.map(({ icon: Icon, title, text }) => (
             <div key={title}>
-              <Icon size={24} {...ICON} />
-              <h3 className="bw-h3">{title}</h3>
+              <Icon size={22} {...ICON} />
+              <h2 className="bw-h3">{title}</h2>
               <p>{text}</p>
             </div>
           ))}
@@ -158,84 +148,68 @@ export default async function HomePage() {
         </section>
       ) : (
         <>
-          <ListingSection
-            title="Featured by the reviewers."
-            link="Browse every extension"
-            href="/search?sort=downloads"
-            extensions={featured}
-          />
-          <ListingSection title="Recently added." link="Newest first" href="/search?sort=newest" extensions={recent} />
-          <ListingSection
-            title="Most downloaded."
-            link="Most downloaded first"
-            href="/search?sort=downloads"
-            extensions={popular}
-          />
+          {featured.length > 0 ? (
+            <section className="bw-w dx-sec">
+              <SectionHead title="Featured by the reviewers." link="Browse everything" href="/search?sort=downloads" />
+              {/* Whole rows only: three columns, so a multiple of three. */}
+              <ExtensionGrid extensions={featured.length > 3 ? featured.slice(0, featured.length - (featured.length % 3)) : featured} />
+            </section>
+          ) : null}
+
+          <section className="bw-w dx-sec">
+            <div className="dx-two">
+              {updated.length > 0 ? (
+                <div>
+                  <SectionHead title="Recently updated." link="All by update" href="/search?sort=updated" />
+                  <ExtensionRows
+                    rows={updated}
+                    fact={(r) => `${r.latestVersion ? `${r.latestVersion}, ` : ""}${timeAgo(r.updatedAt)}`}
+                  />
+                </div>
+              ) : null}
+              {popular.length > 0 ? (
+                <div>
+                  <SectionHead title="Most downloaded." link="All by downloads" href="/search?sort=downloads" />
+                  <ExtensionRows
+                    rows={popular}
+                    fact={(r) => `${formatDownloads(r.totalDownloads ?? 0)} ${r.totalDownloads === 1 ? "download" : "downloads"}`}
+                  />
+                </div>
+              ) : null}
+            </div>
+          </section>
         </>
       )}
 
       <section className="bw-band">
         <div className="bw-w dx-sec">
           <div className="bw-head">
-            <h2 className="bw-h2">Two kinds of extension.</h2>
-            <p>Plugins add features through a typed JMAP client. Themes restyle the whole interface with CSS alone.</p>
+            <h2 className="bw-h2">Build an extension.</h2>
+            <p>The API is a typed JMAP client, a handful of interface slots and a manifest. The review rules are short and public.</p>
           </div>
-          <div className="bw-tiles bw-tiles-2">
-            <Link href="/plugins" className="bw-tile">
-              <Puzzle size={24} className="bw-tile-icon" {...ICON} />
-              <span className="bw-tile-title">
-                {stats.plugins.toLocaleString()} {stats.plugins === 1 ? "plugin" : "plugins"}
-              </span>
-              <span className="bw-tile-text">
-                Toolbar, sidebar and composer extensions, hooks for sending and receiving, and calendar actions.
-              </span>
-              <span className="bw-tile-arrow">
-                <ArrowRight size={20} {...ICON} />
-              </span>
-            </Link>
-            <Link href="/themes" className="bw-tile">
-              <Palette size={24} className="bw-tile-icon" {...ICON} />
-              <span className="bw-tile-title">
-                {stats.themes.toLocaleString()} {stats.themes === 1 ? "theme" : "themes"}
-              </span>
-              <span className="bw-tile-text">
-                CSS variables for the whole interface, light and dark in one bundle, usually under 5 KB.
-              </span>
-              <span className="bw-tile-arrow">
-                <ArrowRight size={20} {...ICON} />
-              </span>
-            </Link>
+          <div className="bw-tiles bw-tiles-3">
+            {BUILD.map((t) => {
+              const external = t.href.startsWith("http");
+              const body = (
+                <>
+                  <span className="bw-tile-title">{t.title}</span>
+                  <span className="bw-tile-text">{t.text}</span>
+                  <span className="bw-tile-arrow">
+                    {external ? <ArrowUpRight size={20} {...ICON} /> : <ArrowRight size={20} {...ICON} />}
+                  </span>
+                </>
+              );
+              return external ? (
+                <a key={t.title} href={t.href} target="_blank" rel="noopener noreferrer" className="bw-tile dx-build-tile">
+                  {body}
+                </a>
+              ) : (
+                <Link key={t.title} href={t.href} className="bw-tile dx-build-tile">
+                  {body}
+                </Link>
+              );
+            })}
           </div>
-        </div>
-      </section>
-
-      <section className="bw-w dx-sec">
-        <div className="bw-head">
-          <h2 className="bw-h2">Build an extension.</h2>
-          <p>The API is a typed JMAP client, a handful of interface slots and a manifest. The review rules are short and public.</p>
-        </div>
-        <div className="bw-tiles bw-tiles-3">
-          {BUILD.map((t) => {
-            const external = t.href.startsWith("http");
-            const body = (
-              <>
-                <span className="bw-tile-title">{t.title}</span>
-                <span className="bw-tile-text">{t.text}</span>
-                <span className="bw-tile-arrow">
-                  {external ? <ArrowUpRight size={20} {...ICON} /> : <ArrowRight size={20} {...ICON} />}
-                </span>
-              </>
-            );
-            return external ? (
-              <a key={t.title} href={t.href} target="_blank" rel="noopener noreferrer" className="bw-tile">
-                {body}
-              </a>
-            ) : (
-              <Link key={t.title} href={t.href} className="bw-tile">
-                {body}
-              </Link>
-            );
-          })}
         </div>
       </section>
     </>

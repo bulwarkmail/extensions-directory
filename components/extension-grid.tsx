@@ -8,10 +8,12 @@ export interface ExtensionGridProps {
   emptyMessage?: string;
   /** Buttons or links under the empty message. */
   emptyActions?: React.ReactNode;
+  /** 2 where the tiles sit right under the page's h1, 3 under a section's h2. */
+  headingLevel?: 2 | 3;
 }
 
 /** Extension tiles in three columns that share their edges. */
-export function ExtensionGrid({ extensions, emptyTitle, emptyMessage, emptyActions }: ExtensionGridProps) {
+export function ExtensionGrid({ extensions, emptyTitle, emptyMessage, emptyActions, headingLevel = 3 }: ExtensionGridProps) {
   if (extensions.length === 0) {
     return (
       <div className="dx-empty">
@@ -25,7 +27,7 @@ export function ExtensionGrid({ extensions, emptyTitle, emptyMessage, emptyActio
   return (
     <div className="bw-tiles bw-tiles-3">
       {extensions.map((ext) => (
-        <ExtensionCard key={ext.slug} {...ext} />
+        <ExtensionCard key={ext.slug} {...ext} headingLevel={headingLevel} />
       ))}
     </div>
   );

@@ -47,39 +47,44 @@ export default async function VersionPage({ params }: Props) {
       </div>
       {v.yankedAt ? <p className="bw-note bw-note-warning">This version was yanked{v.yankReason ? `: ${v.yankReason}` : "."} It is no longer offered for new installs.</p> : null}
       {advisories.map((a) => <p key={a.id} className="bw-note bw-note-warning"><strong>{a.id} ({a.severity})</strong>: {a.summary}{a.fixedIn ? ` Fixed in ${a.fixedIn}.` : ""}</p>)}
-      <div className="bw-btns">
+      <div className="bw-btns dx-version-actions">
         <InstallButton slug={slug} version={v.version} />
         <a className="bw-btn bw-btn-ghost" href={`/api/v1/bundle/${slug}/${encodeURIComponent(v.version)}`}>Download <Download size={16} {...ICON} /></a>
       </div>
-      <InstallHelp />
+      <InstallHelp className="dx-dhero-help" />
 
-      <section className="dx-sec-block">
-        <h2 className="dx-h2">Where it came from</h2>
-        <p>
-          {p.source.commit && p.source.repo ? (
-            <>Built by the directory from commit {p.source.commitUrl ? <a className="bw-link" href={p.source.commitUrl} target="_blank" rel="noopener noreferrer"><code className="bw-icode">{p.source.commit.slice(0, 12)}</code></a> : <code className="bw-icode">{p.source.commit.slice(0, 12)}</code>}{" "}
-              of {p.source.host}/{p.source.repo}{p.source.subpath ? ` (folder ${p.source.subpath})` : ""}{p.source.ref ? `, ${p.source.ref.replace(/^refs\/(tags|heads)\//, "")}` : ""}
-              {workflow ? <>, submitted by workflow <code className="bw-icode">{workflow}</code>{p.ci?.runUrl ? <> (<a className="bw-link" href={p.ci.runUrl} target="_blank" rel="noopener noreferrer">run {p.ci.runId}</a>)</> : null}</> : v.submittedVia === "token" ? ", submitted with an API token" : v.submittedVia === "web" ? ", submitted on the website" : null}.</>
-          ) : (
-            <>Published before the directory recorded commits; it was built from {p.source.repo ?? "an unknown repository"}{p.source.ref ? ` at ${p.source.ref}` : ""}.</>
-          )}
-        </p>
-        <dl className="bw-deflist">
-          <div><dt>SHA-256</dt><dd><code className="bw-icode" style={{ overflowWrap: "anywhere" }}>{v.bundleSha256}</code></dd></div>
-          <div><dt>Build</dt><dd>{p.build.builtWith === "sandbox-build" ? `npm run build in the directory's sandbox${p.build.image ? ` (${p.build.image})` : ""}` : p.build.builtWith === "flat" ? "the plain files, no build step" : "recorded before builds were tracked"}</dd></div>
-          <div><dt>Signature</dt><dd>{full.signature ? <>Signed by the directory, key <code className="bw-icode">{full.signature.keyId}</code>. <Link className="bw-link" href={`/api/v2/extensions/${slug}/versions/${encodeURIComponent(v.version)}/provenance`}>Provenance document</Link></> : "Not signed yet"}</dd></div>
-        </dl>
-      </section>
+      <div className="dx-split dx-version-body">
+        <div className="dx-stack">
+          <section className="dx-version-sec">
+            <h2 className="dx-h2">Changelog</h2>
+            {v.changelog ? <div className="ext-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(v.changelog) }} /> : <p className="bw-help">No notes for this version.</p>}
+          </section>
+          <section className="dx-version-sec">
+            <h2 className="dx-h2">Where it came from</h2>
+            <p>
+              {p.source.commit && p.source.repo ? (
+                <>Built by the directory from commit {p.source.commitUrl ? <a className="bw-link" href={p.source.commitUrl} target="_blank" rel="noopener noreferrer"><code className="bw-icode">{p.source.commit.slice(0, 12)}</code></a> : <code className="bw-icode">{p.source.commit.slice(0, 12)}</code>}{" "}
+                  of {p.source.host}/{p.source.repo}{p.source.subpath ? ` (folder ${p.source.subpath})` : ""}{p.source.ref ? `, ${p.source.ref.replace(/^refs\/(tags|heads)\//, "")}` : ""}
+                  {workflow ? <>, submitted by workflow <code className="bw-icode">{workflow}</code>{p.ci?.runUrl ? <> (<a className="bw-link" href={p.ci.runUrl} target="_blank" rel="noopener noreferrer">run {p.ci.runId}</a>)</> : null}</> : v.submittedVia === "token" ? ", submitted with an API token" : v.submittedVia === "web" ? ", submitted on the website" : null}.</>
+              ) : (
+                <>Published before the directory recorded commits; it was built from {p.source.repo ?? "an unknown repository"}{p.source.ref ? ` at ${p.source.ref}` : ""}.</>
+              )}
+            </p>
+            <dl className="bw-deflist">
+              <div><dt>SHA-256</dt><dd><code className="bw-icode" style={{ overflowWrap: "anywhere" }}>{v.bundleSha256}</code></dd></div>
+              <div><dt>Build</dt><dd>{p.build.builtWith === "sandbox-build" ? `npm run build in the directory's sandbox${p.build.image ? ` (${p.build.image})` : ""}` : p.build.builtWith === "flat" ? "the plain files, no build step" : "recorded before builds were tracked"}</dd></div>
+              <div><dt>Signature</dt><dd>{full.signature ? <>Signed by the directory, key <code className="bw-icode">{full.signature.keyId}</code>. <Link className="bw-link" href={`/api/v2/extensions/${slug}/versions/${encodeURIComponent(v.version)}/provenance`}>Provenance document</Link></> : "Not signed yet"}</dd></div>
+            </dl>
+          </section>
+        </div>
+        <aside className="dx-stack">
+          <section className="dx-version-sec">
+            <h2 className="dx-h2">Permissions</h2>
+            <PermissionList permissions={v.permissions ?? []} isTheme={row.e.type === "theme"} />
+          </section>
+        </aside>
+      </div>
 
-      <section className="dx-sec-block">
-        <h2 className="dx-h2">Changelog</h2>
-        {v.changelog ? <div className="ext-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(v.changelog) }} /> : <p className="bw-help">No notes for this version.</p>}
-      </section>
-
-      <section className="dx-sec-block">
-        <h2 className="dx-h2">Permissions</h2>
-        <PermissionList permissions={v.permissions ?? []} isTheme={row.e.type === "theme"} />
-      </section>
     </div>
   );
 }

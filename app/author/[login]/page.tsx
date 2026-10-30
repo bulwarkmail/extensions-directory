@@ -85,6 +85,7 @@ export default async function AuthorPage({ params }: Props) {
 
       <div className="bw-w dx-sec">
         <ExtensionGrid
+          headingLevel={2}
           extensions={extensions}
           emptyTitle="Nothing published yet."
           emptyMessage="Extensions by this author appear here once a reviewer approves them."
