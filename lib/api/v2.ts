@@ -23,7 +23,8 @@ import { submissionView } from "@/lib/publishing/view";
 import { approveSubmission, rebuildSubmission, rejectSubmission, withdrawSubmission } from "@/lib/review";
 import { bundleResponse, servable } from "@/lib/bundle-response";
 import { downloadsByDay } from "@/lib/downloads";
-import { extensionSummary, fileUrl, versionBrief, versionFull, authorView } from "@/lib/api/views";
+import { changelogsBetween, extensionSummary, fileUrl, versionBrief, versionFull, authorView } from "@/lib/api/views";
+import { noteFlags } from "@/lib/changelog";
 import { compare, isValid } from "@/lib/semver";
 import { cleanSubpath, isValidRepo, parseRepoUrl, source } from "@/lib/sources";
 import { readStaged } from "@/lib/pipeline/staging";
@@ -209,7 +210,10 @@ const publicRoutes: Route[] = [
         if (e.status !== "suspended") {
           const latest = latestFor(all, f);
           if (latest && isValid(i.version) && compare(latest.version, i.version) > 0) {
-            out.updates.push({ slug: e.slug, currentVersion: i.version, ...versionBrief(latest, e.slug), changelog: latest.changelog });
+            out.updates.push({
+              slug: e.slug, currentVersion: i.version, ...versionBrief(latest, e.slug), changelog: latest.changelog, notes: noteFlags(latest.changelog),
+              changelogs: changelogsBetween(all, i.version, latest, f.channel),
+            });
           }
         }
       }

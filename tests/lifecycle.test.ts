@@ -102,4 +102,12 @@ describe("POST /api/v2/updates", () => {
     const res = await v2("POST")(req("/api/v2/updates", { method: "POST", body: { channel: "beta", appVersion: "2.0.0", installed: [{ slug: "jitsi-meet", version: "1.9.0" }] } }));
     expect((await res.json()).data.updates.map((u: { version: string }) => u.version)).toEqual(["1.11.0-beta.1"]);
   });
+
+  it("sends the notes of every version the update brings, without the yanked one", async () => {
+    const res = await v2("POST")(req("/api/v2/updates", { method: "POST", body: { channel: "beta", appVersion: "2.0.0", installed: [{ slug: "jitsi-meet", version: "1.0.0" }] } }));
+    const [update] = (await res.json()).data.updates;
+    expect(update).toMatchObject({ version: "1.11.0-beta.1", changelog: "Beta", notes: { security: false, breaking: false } });
+    // 1.10.0 ("Faster") is yanked above.
+    expect(update.changelogs.map((c: { version: string; changelog: string }) => `${c.version} ${c.changelog}`)).toEqual(["1.11.0-beta.1 Beta", "1.9.0 Backport"]);
+  });
 });

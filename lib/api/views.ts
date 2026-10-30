@@ -2,7 +2,9 @@
 // passed through, and nothing private (emails, reviewer notes, scan reports
 // of published versions) is in them.
 import type { authors, extensions, extensionVersions } from "@/lib/db/schema";
+import { noteFlags } from "@/lib/changelog";
 import { siteUrl } from "@/lib/publishing/view";
+import { compare } from "@/lib/semver";
 import { source } from "@/lib/sources";
 
 type Ext = typeof extensions.$inferSelect;
@@ -30,6 +32,20 @@ export function versionBrief(v: Version, slug: string) {
   };
 }
 
+/**
+ * The notes of every version an update from `installed` to `target` brings,
+ * newest first: the versions above the installed one up to the target that
+ * the caller's channel sees, yanked ones left out. At most 20.
+ */
+export function changelogsBetween(versions: Version[], installed: string, target: Version, channel: "stable" | "beta") {
+  return versions
+    .filter((v) => !v.yankedAt && (v.channel !== "beta" || channel === "beta")
+      && compare(v.version, installed) > 0 && compare(v.version, target.version) <= 0)
+    .sort((a, b) => compare(b.version, a.version))
+    .slice(0, 20)
+    .map((v) => ({ version: v.version, publishedAt: v.publishedAt, changelog: v.changelog, notes: noteFlags(v.changelog) }));
+}
+
 export function versionFull(v: Version, slug: string) {
   const host = v.sourceHost ?? "github.com";
   let src = null as ReturnType<typeof source> | null;
@@ -42,6 +58,7 @@ export function versionFull(v: Version, slug: string) {
   return {
     ...versionBrief(v, slug),
     changelog: v.changelog,
+    notes: noteFlags(v.changelog),
     downloads: v.downloadCount,
     provenance: {
       source: {

@@ -164,7 +164,7 @@ jobs:
         {versions.length ? (
           <details className="dx-details">
             <summary>Edit a changelog</summary>
-            <p className="bw-help">Changelogs come from the release notes of the tag. An edit waits for a reviewer before it shows.</p>
+            <p className="bw-help">Changelogs come from the version&apos;s section of CHANGELOG.md, or else the release notes of the tag. An edit waits for a reviewer before it shows.</p>
             {versions.slice(0, 5).map((v) => (
               <details key={v.id} className="dx-details">
                 <summary>{v.version}</summary>

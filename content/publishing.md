@@ -43,7 +43,29 @@ jobs:
 
 3. Push a tag. The job submits the tagged commit, waits for the build and the checks, and fails if they fail. It finishes once the version is waiting for review; the job summary links to the submission.
 
-The release notes of the tag's GitHub release become the version's changelog.
+### Changelog
+
+Admins read a version's changelog in the webmail before they update, together with the notes of every version they skip. The directory takes it from the first of these that has notes for the version:
+
+1. A `CHANGELOG.md` in the extension's folder (the subpath, or the repository root). It needs a level-2 heading that starts with the version; a date after it is fine, and so is the [Keep a Changelog](https://keepachangelog.com) layout. The notes run to the next level-2 heading:
+
+   ```markdown
+   # Changelog
+
+   ## 1.4.1 (2026-10-29)
+
+   ### Security
+   - Escape the sender's name in the reply header.
+
+   ### Fixed
+   - Keep the header block intact when folding long headers.
+   ```
+
+   A `### Security` or `### Breaking` heading marks the update in the webmail, so admins notice it.
+2. The release notes of the tag's release on GitHub, GitLab or Codeberg.
+3. A `changelog` string in manifest.json.
+
+Without any of them the version is published without a changelog.
 
 To check pull requests without submitting anything, run a dry run. It builds and checks the commit and reports the result, and nothing is queued for review:
 

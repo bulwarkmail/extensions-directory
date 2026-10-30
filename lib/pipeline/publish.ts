@@ -91,7 +91,9 @@ export async function publishSubmission(sub: Submission): Promise<void> {
       extensionId: ext.id,
       version: sub.version!,
       changelog: sub.releaseNotes,
-      changelogSource: sub.releaseNotes ? (typeof manifest.raw.changelog === "string" && manifest.raw.changelog.trim() === sub.releaseNotes ? "manifest" : "release") : null,
+      // Submissions built before release_notes_source existed: tell the manifest from a release by the text.
+      changelogSource: sub.releaseNotes ? (sub.releaseNotesSource
+        ?? (typeof manifest.raw.changelog === "string" && manifest.raw.changelog.trim() === sub.releaseNotes ? "manifest" : "release")) : null,
       bundlePath: stored.path,
       bundleSha256: sha256,
       bundleSize: bundle.length,

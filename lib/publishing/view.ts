@@ -39,7 +39,7 @@ export function submissionView(s: Submission, opts: { full?: boolean } = {}) {
     },
     bundle: s.artifactSha256 ? { sha256: s.artifactSha256, size: s.artifactSize, builtWith: s.buildSource, image: s.builderImage } : null,
     review: decided ? { notes: s.reviewNotes, at: s.reviewedAt } : null,
-    ...(opts.full ? { buildLog: s.buildLog, releaseNotes: s.releaseNotes, diff: s.diffSummary, media: s.media } : {}),
+    ...(opts.full ? { buildLog: s.buildLog, releaseNotes: s.releaseNotes, releaseNotesSource: s.releaseNotesSource, diff: s.diffSummary, media: s.media } : {}),
     ...submissionUrls(s.id),
   };
 }

@@ -228,3 +228,36 @@ describe("review", () => {
     await expect(approveSubmission(submission.id, "staff", null)).rejects.toMatchObject({ status: 400 });
   });
 });
+
+describe("changelogs", () => {
+  const folder = (version: string, changelog: string | null) => Object.fromEntries([
+    ...Object.entries(plainPlugin("jitsi-meet", version, { changelog: "From the manifest" })),
+    ...(changelog === null ? [] : [["CHANGELOG.md", changelog]]),
+  ].map(([k, v]) => [`jitsi-meet/${k}`, v]));
+  const CHANGELOG = "# Changelog\r\n\r\n## Unreleased\r\n\r\n## 8.1.0 (2026-10-30)\r\n\r\n### Security\r\n- Escape names\r\n\r\n## 8.0.0\r\n\r\n- Older\r\n";
+
+  it("takes the version's section of CHANGELOG.md over the tag's release and the manifest", async () => {
+    addRepo("alice/plugins", { refs: { "v8.1.0": sha(81) }, commits: { [sha(81)]: folder("8.1.0", CHANGELOG) }, releases: { "v8.1.0": "From the release" } });
+    const { submission } = await web("author-alice", "v8.1.0");
+    await drain();
+    expect(sub(submission.id)).toMatchObject({ status: "awaiting_review", releaseNotes: "### Security\n- Escape names", releaseNotesSource: "file" });
+
+    await approveSubmission(submission.id, "staff", null);
+    await drain();
+    const v = db.select().from(extensionVersions).where(eq(extensionVersions.id, sub(submission.id).versionId!)).get()!;
+    expect(v).toMatchObject({ changelog: "### Security\n- Escape names", changelogSource: "file" });
+  });
+
+  it("falls back to the release, then the manifest, when CHANGELOG.md has no notes for the version", async () => {
+    addRepo("alice/plugins", {
+      refs: { "v8.2.0": sha(82), "v8.3.0": sha(83) },
+      commits: { [sha(82)]: folder("8.2.0", CHANGELOG), [sha(83)]: folder("8.3.0", "# Changelog\n\n## 8.3.0\n\n### Fixed\n") },
+      releases: { "v8.2.0": "From the release" },
+    });
+    const a = (await web("author-alice", "v8.2.0")).submission;
+    const b = (await web("author-alice", "v8.3.0")).submission;
+    await drain();
+    expect(sub(a.id)).toMatchObject({ releaseNotes: "From the release", releaseNotesSource: "release" });
+    expect(sub(b.id)).toMatchObject({ releaseNotes: "From the manifest", releaseNotesSource: "manifest" });
+  });
+});

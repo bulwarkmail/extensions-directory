@@ -211,7 +211,7 @@ export const extensionVersions = sqliteTable(
     signature: text("signature"),
     signingKeyId: text("signing_key_id"),
     signedStatement: text("signed_statement"),
-    changelogSource: text("changelog_source", { enum: ["release", "manifest", "manual", "legacy"] }),
+    changelogSource: text("changelog_source", { enum: ["file", "release", "manifest", "manual", "legacy"] }),
     downloadCount: integer("download_count").notNull().default(0),
   },
   (table) => [
@@ -331,6 +331,8 @@ export const submissions = sqliteTable(
     artifactSize: integer("artifact_size"),
     media: json<StagedMedia>("media"),
     releaseNotes: text("release_notes"),
+    // Where the notes came from: the folder's CHANGELOG.md, the tag's release, or manifest.json.
+    releaseNotesSource: text("release_notes_source", { enum: ["file", "release", "manifest"] }),
     diffSummary: json<Record<string, unknown>>("diff_summary"),
     compatReport: json<Record<string, unknown>>("compat_report"),
     attempts: integer("attempts").notNull().default(0),

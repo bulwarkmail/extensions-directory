@@ -20,6 +20,7 @@ import { BuildError, collectSource, openArchive, resolveBundleFiles, zipBundle }
 import { diffBundles, readZipFiles } from "./diff";
 import { stage } from "./staging";
 import { compare } from "@/lib/semver";
+import { MAX_NOTES, notesFromFiles } from "@/lib/changelog";
 
 type Submission = typeof submissions.$inferSelect;
 
@@ -175,9 +176,14 @@ export async function buildSubmission(sub: Submission): Promise<Partial<Submissi
 
   fields.artifactPath = await stage(sub.id, "bundle.zip", bundle);
   fields.media = await stageMedia(sub.id, sourceFiles, manifest);
+  // The notes: the version's section of the folder's CHANGELOG.md, which was
+  // reviewed with the code, else the tag's release, else manifest.json.
   const tag = tagName(sub.githubTag);
-  fields.releaseNotes = (tag ? await src.releaseNotes(sub.githubRepo, tag).catch(() => null) : null)
-    ?? (typeof manifest.raw.changelog === "string" ? manifest.raw.changelog.slice(0, 20_000) : null);
+  const fromFile = notesFromFiles(sourceFiles, manifest.version);
+  const fromRelease = fromFile ? null : (tag ? await src.releaseNotes(sub.githubRepo, tag).catch(() => null) : null)?.slice(0, MAX_NOTES) ?? null;
+  const fromManifest = typeof manifest.raw.changelog === "string" && manifest.raw.changelog.trim() ? manifest.raw.changelog.trim().slice(0, MAX_NOTES) : null;
+  fields.releaseNotes = fromFile ?? fromRelease ?? fromManifest;
+  fields.releaseNotesSource = fromFile ? "file" : fromRelease ? "release" : fromManifest ? "manifest" : null;
   fields.diffSummary = diffBundles(await previousRelease(ext.id), { files: resolved.files, manifest: manifest.raw }) as unknown as Record<string, unknown>;
   return fields;
 }

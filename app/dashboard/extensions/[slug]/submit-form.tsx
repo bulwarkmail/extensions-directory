@@ -11,7 +11,7 @@ export function SubmitVersionForm({ slug }: { slug: string }) {
       submit="Submit"
       onDone={(data) => router.push(`/dashboard/submissions/${(data as { id: string }).id}`)}
       fields={[
-        { name: "ref", label: "Tag, branch or commit", placeholder: "v1.2.0", help: "A tag is best: its GitHub release notes become the changelog." },
+        { name: "ref", label: "Tag, branch or commit", placeholder: "v1.2.0", help: "A tag is best. The changelog comes from CHANGELOG.md, or else the tag's release notes." },
         { name: "dryRun", label: "Dry run: build and check only", type: "checkbox" },
       ]}
     />

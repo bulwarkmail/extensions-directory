@@ -8,6 +8,12 @@ import { ScanFindings, type ScanFinding } from "@/components/scan-findings";
 
 type Submission = typeof submissions.$inferSelect;
 
+const NOTES_SOURCE: Record<NonNullable<Submission["releaseNotesSource"]>, string> = {
+  file: "From the version's section of CHANGELOG.md.",
+  release: "From the release notes of the tag.",
+  manifest: "From the changelog in manifest.json.",
+};
+
 interface Diff {
   previousVersion: string | null;
   added: string[];
@@ -92,7 +98,16 @@ export function SubmissionDetails({ s }: { s: Submission }) {
       {s.releaseNotes ? (
         <section>
           <h3 className="bw-h3">Changelog</h3>
+          {s.releaseNotesSource ? <p className="bw-help">{NOTES_SOURCE[s.releaseNotesSource]}</p> : null}
           <div className="ext-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(s.releaseNotes) }} />
+        </section>
+      ) : s.artifactSha256 ? (
+        <section>
+          <h3 className="bw-h3">Changelog</h3>
+          <p className="bw-help">
+            No notes for {s.version ?? "this version"}: there is no section for it in a CHANGELOG.md in the folder, no release for the tag
+            and no changelog in manifest.json. Admins updating to it see no changelog.
+          </p>
         </section>
       ) : null}
 
