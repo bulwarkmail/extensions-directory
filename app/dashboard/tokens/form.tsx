@@ -36,8 +36,12 @@ export function NewTokenForm({ extensions }: { extensions: { slug: string; name:
       <div className="bw-note">
         <p><strong>Copy this token now.</strong> It is not shown again; only a hash is stored.</p>
         <pre className="bw-code"><code>{token}</code></pre>
-        <p>Use it as <code className="bw-icode">BULWARK_EXTENSIONS_TOKEN</code>:</p>
-        <pre className="bw-code"><code>{`BULWARK_EXTENSIONS_TOKEN=${token.slice(0, 16)}… npx @bulwarkmail/extension-cli publish --slug <id> --ref v1.2.0`}</code></pre>
+        <p>Store it as a CI secret named <code className="bw-icode">BULWARK_EXTENSIONS_TOKEN</code> and submit a version with it:</p>
+        <pre className="bw-code"><code>{`curl -X POST ${window.location.origin}/api/v2/publish \\
+  -H "Authorization: Bearer $BULWARK_EXTENSIONS_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "slug": "<id>", "ref": "v1.2.0" }'`}</code></pre>
+        <p>The <a href="/publishing">publishing page</a> explains the answer and how to poll for the result.</p>
         <button type="button" className="bw-btn bw-btn-ghost" onClick={() => setToken(null)}>Done</button>
       </div>
     );

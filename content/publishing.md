@@ -83,16 +83,20 @@ jobs:
           dry-run: true
 ```
 
-Dry runs from branches and pull requests are allowed even when the publisher only accepts tags. Pull requests from forks get no token from GitHub, so they can't run this step; use `npx @bulwarkmail/extension-cli validate` there instead.
+Dry runs from branches and pull requests are allowed even when the publisher only accepts tags. Pull requests from forks get no token from GitHub, so they can't run this step; start a dry run from the dashboard instead (below).
 
 ## From anywhere else (API tokens)
 
-For GitLab CI, Forgejo Actions or a script, create an API token on the [tokens page](/dashboard/tokens). A token is limited to the extensions you pick and to what it may do (submit, dry run, read status), and it expires. It is shown once; store it as a CI secret named `BULWARK_EXTENSIONS_TOKEN`.
+For GitLab CI, Forgejo Actions or a script, create an API token on the [tokens page](/dashboard/tokens). A token is limited to the extensions you pick and to what it may do (submit, dry run, read status), and it expires. It is shown once; store it as a CI secret named `BULWARK_EXTENSIONS_TOKEN`. Send it to the publishing endpoint with the extension's slug and the ref to build:
 
 ```sh
-npx @bulwarkmail/extension-cli publish --slug my-plugin --ref v1.2.0
-npx @bulwarkmail/extension-cli dry-run --slug my-plugin --ref "$CI_COMMIT_SHA"
+curl -X POST https://extensions.bulwarkmail.org/api/v2/publish \
+  -H "Authorization: Bearer $BULWARK_EXTENSIONS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "slug": "my-plugin", "ref": "v1.2.0" }'
 ```
+
+`/api/v2/publish/dry-run` takes the same body and only builds and checks. The answer tells you where to poll for the result (see "The API" below).
 
 GitLab CI:
 
@@ -102,18 +106,22 @@ publish:
   rules:
     - if: $CI_COMMIT_TAG
   script:
-    - npx @bulwarkmail/extension-cli publish --slug my-plugin --ref "$CI_COMMIT_TAG"
+    - >
+      curl --fail-with-body -X POST https://extensions.bulwarkmail.org/api/v2/publish
+      -H "Authorization: Bearer $BULWARK_EXTENSIONS_TOKEN"
+      -H "Content-Type: application/json"
+      -d "{ \"slug\": \"my-plugin\", \"ref\": \"$CI_COMMIT_TAG\" }"
 ```
 
 A token can only submit from the repository and folder set on the extension; it can't point the extension elsewhere.
 
 ## Before you submit
 
-`npx @bulwarkmail/extension-cli validate` runs the webmail's manifest and package checks on your folder without contacting the directory.
+On the extension's page in the dashboard, submit the tag, branch or commit with **Dry run: build and check only** ticked. The directory builds it and runs the same install checks and code scanner as for a real submission, shows you the result, and queues nothing for review.
 
 ## The API
 
-The Action and the CLI use the same endpoints; you can call them directly.
+The Action uses these endpoints; you can call them directly.
 
 ```
 POST /api/v2/publish            Authorization: Bearer <GitHub OIDC token | bwx_ API token>
