@@ -15,6 +15,7 @@ import { RateForm, ReportForm } from "./forms";
 import { InstallButton, InstallHelp } from "@/components/install-button";
 import { installUrl } from "@/lib/connector-link";
 import type { Metadata } from "next";
+import { ScreenshotGallery } from "@/components/screenshot-gallery";
 
 const firstLine = (s: string) => {
   const line = s.split(/\r?\n/).map((l) => l.replace(/^[#*\-\s]+/, "").trim()).find(Boolean) ?? "";
@@ -222,17 +223,7 @@ export default async function ExtensionDetailPage({ params }: Props) {
             {pictures.length > 0 ? (
               <section>
                 <h2 className="dx-h2">Screenshots</h2>
-                <div className="dx-shots">
-                  {pictures.map((p) => (
-                    <figure key={p.key}>
-                      <span className="dx-shot">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={`/api/v1/files/${p.path}`} alt={p.alt} loading="lazy" />
-                      </span>
-                      {p.caption ? <figcaption>{p.caption}</figcaption> : null}
-                    </figure>
-                  ))}
-                </div>
+                <ScreenshotGallery pictures={pictures.map((p) => ({ key: p.key, src: `/api/v1/files/${p.path}`, alt: p.alt, caption: p.caption }))} />
               </section>
             ) : null}
 

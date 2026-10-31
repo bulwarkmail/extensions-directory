@@ -1624,10 +1624,16 @@ textarea.bw-input {
 }
 .dx-shots .dx-shot {
   display: block;
+  width: 100%;
+  padding: 0;
   overflow: hidden;
   line-height: 0;
   border: 1px solid var(--bw-rule);
   background: var(--bw-surface);
+  cursor: zoom-in;
+}
+.dx-shots .dx-shot:hover {
+  border-color: var(--bw-control);
 }
 .dx-shots img {
   width: 100%;
@@ -1836,6 +1842,23 @@ a.dx-rows-name:hover {
   background: var(--bw-page);
   color: var(--bw-text);
   border: 1px solid var(--bw-control);
+}
+.dx-dialog-wide {
+  max-width: min(1400px, 100%);
+}
+.dx-lightbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+}
+.dx-lightbox img {
+  flex: 1;
+  min-width: 0;
+  max-height: calc(100vh - 160px);
+  object-fit: contain;
+  border: 1px solid var(--bw-rule);
+  background: var(--bw-surface);
 }
 .dx-dialog-head {
   display: flex;

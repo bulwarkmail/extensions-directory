@@ -17,12 +17,15 @@ export function Dialog({
   description,
   onClose,
   children,
+  wide = false,
 }: {
   id: string;
   title: string;
   description?: React.ReactNode;
   onClose: () => void;
   children: React.ReactNode;
+  /** Up to 1400px wide, for a picture. */
+  wide?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -72,7 +75,7 @@ export function Dialog({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div ref={panelRef} className="dx-dialog" role="dialog" aria-modal="true" aria-labelledby={`${id}-title`}>
+      <div ref={panelRef} className={wide ? "dx-dialog dx-dialog-wide" : "dx-dialog"} role="dialog" aria-modal="true" aria-labelledby={`${id}-title`}>
         <div className="dx-dialog-head">
           <div>
             <h2 id={`${id}-title`} className="bw-h3">
