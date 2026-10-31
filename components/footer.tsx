@@ -25,7 +25,7 @@ const COLUMNS: { h: string; links: { label: string; href: string; external?: boo
     h: "Project",
     links: [
       { label: "Bulwark Webmail", href: "https://bulwarkmail.org", external: true },
-      { label: "GitHub", href: "https://github.com/bulwarkmail/Extensions", external: true },
+      { label: "GitHub", href: "https://github.com/bulwarkmail/extensions-directory", external: true },
       { label: "Discord", href: "https://discord.com/invite/tYCujymGrT", external: true },
       { label: "Stalwart", href: "https://stalw.art", external: true },
     ],
