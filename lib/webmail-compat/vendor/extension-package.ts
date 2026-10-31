@@ -1,4 +1,4 @@
-// Copied from the webmail (bulwarkmail/webmail 3fac196d3, lib/extension-package.ts)
+// Copied from the webmail (bulwarkmail/webmail 4887ed457, lib/extension-package.ts)
 // by scripts/sync-webmail-compat.mjs. Do not edit; sync again instead.
 // @ts-nocheck
 /* eslint-disable */
@@ -211,6 +211,8 @@ function isSafeEntrypoint(value: string): boolean {
 }
 
 const VERSION_RE = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+/** What an extension version looks like, for callers that take one from a request. */
+export const EXTENSION_VERSION_RE = /^(?=.{1,64}$)\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 
 /** Compare dotted versions numerically; pre-release tags are ignored. */
 export function compareVersions(a: string, b: string): number {
@@ -309,6 +311,8 @@ export interface ConfigFieldSchema {
   default?: unknown;
   placeholder?: string;
   options?: { label: string; value: string }[];
+  /** `type: 'string'` only: the admin form shows a full-width text box. */
+  multiline?: boolean;
 }
 
 function validateConfigSchema(raw: unknown, errors: string[]): Record<string, ConfigFieldSchema> | undefined {
@@ -493,7 +497,7 @@ export function suspiciousCode(code: string): string[] {
   return SUSPICIOUS_JS_PATTERNS.filter(({ pattern }) => pattern.test(code)).map(({ label }) => label);
 }
 
-function canonicalJson(value: unknown): string {
+export function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
     const entries = Object.entries(value as Record<string, unknown>)

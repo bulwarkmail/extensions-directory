@@ -7,7 +7,7 @@
   },
   "email_write": {
     "title": "Change and organise your email",
-    "body": "Add or remove tags, flags and other keywords on your messages, move them between your folders and to the archive, and save drafts."
+    "body": "Add or remove tags, flags and other keywords on your messages, move them between your folders and to the archive, and save drafts. It can also store a small value that every member of a team mailbox can read."
   },
   "email_send": {
     "title": "Change mail before it is sent",
@@ -123,7 +123,11 @@
   },
   "account_read": {
     "title": "See your accounts",
-    "body": "See the accounts you added, with their addresses and servers."
+    "body": "See the accounts you added with their addresses and servers, and which mail accounts are team mailboxes."
+  },
+  "directory_read": {
+    "title": "Look up people",
+    "body": "Look up people in your organisation's directory."
   },
   "http_post": {
     "title": "Use the webmail server for you",
@@ -239,7 +243,7 @@
   },
   "http_proxy": {
     "title": "Use accounts you connect",
-    "body": "Send requests through Bulwark's server with an account or key that you or your administrator set up. The plugin never sees the password, but it can do anything that account can do on its own server."
+    "body": "Send requests through {appName}'s server with an account or key that you or your administrator set up. The plugin never sees the password, but it can do anything that account can do on its own server."
   },
   "compose_open": {
     "title": "Open the composer for you",
@@ -252,6 +256,10 @@
   "compose_write": {
     "title": "Change the message you are writing",
     "body": "Replace or add text in a message while you write it, when you use the plugin in the composer. You can undo each change, and you still decide whether to send."
+  },
+  "email_forward": {
+    "title": "Forward your mail",
+    "body": "Forward messages from your account with their attachments, without opening the composer. You are asked before the first forward to each address."
   },
   "ui_notifications": {
     "title": "Show notifications",

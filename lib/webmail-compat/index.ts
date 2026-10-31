@@ -30,7 +30,7 @@ export const LIMITS = {
 
 /** Same rules as the webmail's consent dialog (lib/plugin-sandbox/permission-text.ts). */
 export const HIGH_RISK_PERMISSIONS: ReadonlySet<string> = new Set([
-  "crypto:full", "email:read", "email:send", "email:raw-send", "email:blob-read",
+  "crypto:full", "email:read", "email:send", "email:raw-send", "email:forward", "email:blob-read",
   "email:blob-write", "email:render-takeover", "http:fetch", "http:post",
   "filters:write", "http:proxy", "identity:write", "vacation:write",
 ]);

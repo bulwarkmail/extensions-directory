@@ -1,4 +1,4 @@
-// Copied from the webmail (bulwarkmail/webmail 3fac196d3, lib/plugin-types.ts)
+// Copied from the webmail (bulwarkmail/webmail 4887ed457, lib/plugin-types.ts)
 // by scripts/sync-webmail-compat.mjs. Do not edit; sync again instead.
 // @ts-nocheck
 /* eslint-disable */
@@ -401,6 +401,14 @@ export interface KeyboardShortcut {
 
 export interface EmailReadView {
   id: string;
+  /**
+   * The JMAP account the message is in. Message ids repeat across accounts
+   * (own, shared, group), so pass it to email.get / getRaw / getAttachment /
+   * setKeyword to name this very message. Always set on what email.get,
+   * list and search return; elsewhere set at least when messages of several
+   * accounts are listed together.
+   */
+  accountId?: string;
   threadId: string;
   mailboxIds: string[];
   from: { name: string; email: string }[];
@@ -466,6 +474,8 @@ export interface EmailSummary {
   keywords: string[];
   hasAttachment: boolean;
   size: number;
+  /** See EmailReadView.accountId. */
+  accountId?: string;
 }
 
 export interface DraftView {
@@ -731,6 +741,34 @@ export interface ComposeInput {
 export type DraftInput = ComposeInput;
 
 /**
+ * What a plugin passes to `api.email.forward`. The host builds the forward
+ * (subject with the forward prefix, the plugin's note, the original's
+ * header lines and text) and sends it from the user's default address.
+ */
+export interface EmailForwardInput {
+  /** 1-10 recipients, `a@example.com` or `Name <a@example.com>`. */
+  to: string[];
+  /** A note above the forwarded message, plain text, up to 64 KB. */
+  text?: string;
+  /**
+   * Which attachments of the original go along, by blobId (attachments of
+   * that message only). Default: every attachment that isn't an inline image.
+   */
+  attachments?: string[];
+  /** The account the message is in, as on EmailReadView (team and shared mailboxes). */
+  accountId?: string;
+}
+
+/**
+ * What `api.email.forward` resolves to. `declined`: the user didn't let the
+ * plugin forward to a new address; `stopped`: a pre-send check or another
+ * plugin's onBeforeEmailSend stopped the send.
+ */
+export type EmailForwardResult =
+  | { sent: true; emailId: string | null; to: string[]; scheduledFor: string | null }
+  | { sent: false; reason: 'declined' | 'stopped' };
+
+/**
  * What a plugin passes to `api.notifications.show`. The plugin's name is
  * added to what the user sees, so they know who sent it.
  */
@@ -815,6 +853,48 @@ export interface KeyboardEventView {
   metaKey: boolean;
 }
 
+/** What `api.app.getInfo()` tells a plugin about the app it runs in. */
+export interface AppInfoView {
+  /** The product: always "Bulwark Mail". */
+  product: string;
+  /** The name the administrator gave this installation (APP_NAME), e.g. "Webmail". */
+  name: string;
+  /** The app's version, e.g. "1.17.0". */
+  version: string;
+  /** "full", or "lite" for the static build without a server of its own. */
+  edition: 'full' | 'lite';
+  /** Whether the Stalwart-specific features (filters, vacation, password) are on. */
+  stalwartFeatures: boolean;
+  /** A demo installation with sample data. */
+  demoMode: boolean;
+}
+
+/**
+ * Features of Bulwark itself that replace what a plugin did, as
+ * `api.host.features` tells the plugin (no permission needed). A plugin
+ * that does the same job steps back while one is true. Missing on hosts
+ * older than 1.19.0, so read it as `api.host?.features?.x === true`.
+ */
+export interface HostFeaturesView {
+  /** The admin turned on the "External" label on mail from outside the organisation (organisation.externalMail.senderLabel). */
+  externalSenderLabel: boolean;
+  /** The admin turned on the confirm before sending outside the organisation (organisation.externalMail.recipientWarning). */
+  externalRecipientWarning: boolean;
+}
+
+/** One setting `api.app.searchSettings` found, in the user's language. */
+export interface SettingsSearchResult {
+  /** The settings page's id: account, appearance, composing, vacation, ... */
+  pageId: string;
+  /** The page's name as the user sees it. */
+  page: string;
+  label: string;
+  description?: string;
+}
+
+/** The user's preferences `api.app.getSettings()` shares: plain values by setting name. */
+export type AppSettingsView = Record<string, string | number | boolean | number[] | string[]>;
+
 export interface AppConfigView {
   appName: string;
   demoMode: boolean;
@@ -860,6 +940,8 @@ export interface EmailListBadge {
   color?: string;
   /** Tooltip / aria-label */
   title?: string;
+  /** Name of a host icon (see components/icons) shown before the label, e.g. "check" or "user". */
+  icon?: string;
 }
 
 // ─── Message-list category tabs (Gmail-style inbox tabs) ─────
@@ -1080,7 +1162,8 @@ export interface QuoteHeader {
   text: string;
   /**
    * When false, the composer skips its default blockquote wrapping around the
-   * quoted body (HTML mode only). Use this for the Outlook style where the
+   * quoted body, including HTML islands and nested blockquotes (HTML mode only).
+   * This preference persists when saving/reopening drafts. Use this for the Outlook style where the
    * quoted message is intended to follow the header without indentation.
    * Defaults to true (preserve the existing blockquote wrapping).
    */
@@ -1163,19 +1246,39 @@ export interface ConflictWarning {
 }
 
 /**
- * Returned by onProvideSearchResults transform handlers. Plugins extend the
- * initial array with their own results (CRM hits, Slack messages, etc.).
- * The host renders these in a grouped section below native email results.
+ * Returned by onProvideSearchResults handlers: results from elsewhere (CRM
+ * hits, chat messages, ...) for the search that is running. The host draws
+ * them as a block above the search's message list, grouped by `source`.
+ * A click on an entry that names a message the user can reach (`email`)
+ * opens it in the reader, as a click on a row of the list does. Any other
+ * click reaches the plugin that returned the entry as `onAction`, with
+ * `surface: 'search-results'`, the entry's `key` as `actionId` and the
+ * search's `query` in the context. Plain text only, but the snippet may
+ * mark what matched as SearchSnippet/get does; see
+ * lib/plugin-search-results.ts for the limits.
  */
 export interface ExternalSearchResult {
-  /** Stable unique key */
+  /** Unique among the plugin's entries for this search; comes back as actionId. */
   key: string;
   title: string;
+  /**
+   * May wrap what matched in `<mark>`…`</mark>`, highlighted as the list's
+   * own search snippets; `&`, `<`, `>` meant as text escaped as `&amp;`,
+   * `&lt;`, `&gt;`. No other markup: any other tag shows as text.
+   */
   snippet: string;
-  /** Plugin-handled action when the result row is clicked */
-  onClick: () => void;
-  /** Optional source label, e.g. "Slack", "Notion" */
+  /** Group heading, e.g. "CRM", "Slack"; the plugin's name when missing. */
   source?: string;
+  /** The message the entry stands for, opened in the reader on a click. */
+  email?: SearchResultEmail;
+}
+
+/** A message named by a search result. */
+export interface SearchResultEmail {
+  /** The message's JMAP id. */
+  id: string;
+  /** The JMAP account holding it (a shared or group account); the signed-in account's own when missing. */
+  accountId?: string;
 }
 
 /**
@@ -1274,6 +1377,9 @@ export const ALL_PERMISSIONS = [
   'compose:read',
   // Change the message being written (api.composer.replaceSelection/replaceBody).
   'compose:write',
+  // Forward a message of the account with its attachments, without the
+  // composer (api.email.forward). The host asks the user once per address.
+  'email:forward',
   'calendar:read', 'calendar:write',
   'contacts:read', 'contacts:write',
   'files:read', 'files:write',
@@ -1287,6 +1393,8 @@ export const ALL_PERMISSIONS = [
   'auth:observe',
   'auth:emit',
   'account:read',
+  // Look people up in the server's directory (api.user.findPeople).
+  'directory:read',
   'http:post', 'http:fetch',
   'ui:observe', 'ui:toolbar', 'ui:app-top-banner', 'ui:email-banner', 'ui:email-footer', 'ui:contact-cryptokeys',
   'ui:email-details',

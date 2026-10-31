@@ -1,4 +1,4 @@
-// Copied from the webmail (bulwarkmail/webmail 3fac196d3, lib/color-transform.ts)
+// Copied from the webmail (bulwarkmail/webmail 4887ed457, lib/color-transform.ts)
 // by scripts/sync-webmail-compat.mjs. Do not edit; sync again instead.
 // @ts-nocheck
 /* eslint-disable */
@@ -119,12 +119,15 @@ export function getLuminance(r: number, g: number, b: number): number {
 }
 
 /**
- * Text colour for a label on a solid fill: white while white keeps 3:1
- * contrast with the fill, near-black on lighter fills.
+ * Text colour for a label on a solid fill: white while white reaches the
+ * 4.5:1 that small text needs, otherwise whichever of white and near-black
+ * (#111827) contrasts more with the fill.
  */
 export function readableTextOn(colorString: string): string {
   const rgb = parseColor(colorString);
   if (!rgb) return '#ffffff';
-  const contrastWithWhite = 1.05 / (getLuminance(rgb.r, rgb.g, rgb.b) + 0.05);
-  return contrastWithWhite >= 3 ? '#ffffff' : '#111827';
+  const fill = getLuminance(rgb.r, rgb.g, rgb.b);
+  const contrastWithWhite = 1.05 / (fill + 0.05);
+  const contrastWithDark = (fill + 0.05) / (getLuminance(17, 24, 39) + 0.05);
+  return contrastWithWhite >= 4.5 || contrastWithWhite >= contrastWithDark ? '#ffffff' : '#111827';
 }
