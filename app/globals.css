@@ -9,9 +9,6 @@
    are in local-data/design-system.md of the webmail checkout and on
    https://bulwarkmail.org/brand.
 
-   The directory has no editions (plugins do not run in Bulwark Lite), so
-   the Lite tokens and the edition utilities are left out on purpose.
-
    Classes that only the directory needs are prefixed .dx-* and are built
    from the same tokens; they come after the copied block.
 
@@ -459,7 +456,7 @@ h3 {
   }
 }
 
-/* Two-part segmented control (the website's edition switch). The active
+/* Two-part segmented control. The active
    side is filled with the text colour. */
 .bw-switch {
   display: inline-flex;
