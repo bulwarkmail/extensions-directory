@@ -54,7 +54,7 @@ beforeAll(() => {
   // A maintainer on one of Linus's extensions stays one.
   run("insert into extension_members (extension_id, author_id, role, created_at) values ('e-cal', 'paul', 'maintainer', 10)");
 
-  migrate(drizzle(sqlite), { migrationsFolder: MIGRATIONS });
+  migrate(drizzle(sqlite), { migrationsFolder: migrationsUpTo(4) });
 });
 
 describe("0004_org_owners", () => {
