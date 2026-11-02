@@ -1,4 +1,4 @@
-// Copied from the webmail (bulwarkmail/webmail 4887ed457, lib/theme-loader.ts)
+// Copied from the webmail (bulwarkmail/webmail 7cf733225, lib/theme-loader.ts)
 // by scripts/sync-webmail-compat.mjs. Do not edit; sync again instead.
 // @ts-nocheck
 /* eslint-disable */
@@ -6,6 +6,7 @@
 
 import { DISALLOWED_CSS_PATTERNS } from './plugin-types';
 import { syncThemeColorMeta } from './theme-color-meta';
+import { THEME_CACHE_KEY, THEME_CACHE_MAX } from './boot-skeleton/keys';
 
 const THEME_STYLE_ID = 'active-theme';
 const THEME_SKIN_STYLE_ID = 'active-theme-skin';
@@ -184,6 +185,53 @@ export function validateThemeSelectors(css: string): string[] {
   return restrictThemeSelectors(css).warnings;
 }
 
+interface ThemeCache {
+  v: 1;
+  css?: string;
+  skin?: string;
+  skinId?: string;
+}
+
+function readThemeCache(): ThemeCache {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(THEME_CACHE_KEY) || 'null');
+    if (parsed && typeof parsed === 'object' && parsed.v === 1) return parsed as ThemeCache;
+  } catch { /* corrupt or blocked: start over */ }
+  return { v: 1 };
+}
+
+/**
+ * Keeps a copy of the injected theme for the next page load: the boot script
+ * in app/(main)/layout.tsx (applyBootTheme) recreates the same <style>
+ * elements before the first paint, so a themed page never paints in the
+ * default palette first. Too large to cache, or storage full: no copy, and
+ * the page paints the default palette until the theme loads, as before.
+ */
+function updateThemeCache(change: Partial<Omit<ThemeCache, 'v'>>): void {
+  try {
+    const next: ThemeCache = { ...readThemeCache(), ...change };
+    if (!next.css) delete next.css;
+    if (!next.skin || !next.skinId) { delete next.skin; delete next.skinId; }
+    const size = (next.css?.length ?? 0) + (next.skin?.length ?? 0);
+    if ((!next.css && !next.skin) || size > THEME_CACHE_MAX) {
+      localStorage.removeItem(THEME_CACHE_KEY);
+      return;
+    }
+    localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(next));
+  } catch {
+    try { localStorage.removeItem(THEME_CACHE_KEY); } catch { /* storage blocked */ }
+  }
+}
+
+/**
+ * The skin as the boot script can apply it. <body> doesn't exist when that
+ * script runs, so selectors on `body[data-theme-skin=...]` are rewritten to
+ * hang off <html>, where the script sets the same attribute.
+ */
+export function bootSkinCSS(css: string): string {
+  return css.replace(/\bbody(\[data-theme-skin(?:[~|^$*]?=[^\]]*)?\])/g, 'html$1 body');
+}
+
 /**
  * Inject theme CSS into the document head.
  * Inserted after globals.css so theme variables win specificity.
@@ -200,6 +248,7 @@ export function injectThemeCSS(css: string): void {
   }
 
   styleEl.textContent = css;
+  updateThemeCache({ css });
   syncThemeColorMeta();
 }
 
@@ -213,6 +262,7 @@ export function removeThemeCSS(): void {
   if (styleEl) {
     styleEl.remove();
   }
+  updateThemeCache({ css: undefined });
   syncThemeColorMeta();
 }
 
@@ -239,6 +289,9 @@ export function injectThemeSkinCSS(css: string, themeId: string): void {
   if (document.body) {
     document.body.setAttribute(THEME_SKIN_BODY_ATTR, themeId);
   }
+  // The boot copy's attribute on <html> has done its job once <body> has it.
+  document.documentElement.removeAttribute(THEME_SKIN_BODY_ATTR);
+  updateThemeCache({ skin: bootSkinCSS(css), skinId: themeId });
   syncThemeColorMeta();
 }
 
@@ -248,6 +301,8 @@ export function removeThemeSkinCSS(): void {
   const styleEl = document.getElementById(THEME_SKIN_STYLE_ID);
   if (styleEl) styleEl.remove();
   if (document.body) document.body.removeAttribute(THEME_SKIN_BODY_ATTR);
+  document.documentElement.removeAttribute(THEME_SKIN_BODY_ATTR);
+  updateThemeCache({ skin: undefined, skinId: undefined });
   syncThemeColorMeta();
 }
 

@@ -227,7 +227,7 @@
   },
   "ui_tasks": {
     "title": "Add to tasks",
-    "body": "Show its own sections in a task's details and buttons in the task list."
+    "body": "Show its own sections in a task's details, buttons in the task list, and its own task list in place of Bulwark's."
   },
   "ui_files": {
     "title": "Add to files",
@@ -251,11 +251,15 @@
   },
   "compose_read": {
     "title": "Read the message you are writing",
-    "body": "Read the text of a message while you write it, when you use the plugin in the composer. Not the signature or the quoted message."
+    "body": "Read a message while you write it, when you use the plugin in the composer: its text, subject, recipients including Bcc, and the names and sizes of attachments. Not the signature or the quoted message."
   },
   "compose_write": {
     "title": "Change the message you are writing",
     "body": "Replace or add text in a message while you write it, when you use the plugin in the composer. You can undo each change, and you still decide whether to send."
+  },
+  "compose_check": {
+    "title": "Check what you write",
+    "body": "Reads what you write in the composer while you type and may send it to the service it uses. Only where proofreading is on, and nothing while a message is set to be signed or encrypted. Text you wrote before you turned that on may already have been checked."
   },
   "email_forward": {
     "title": "Forward your mail",

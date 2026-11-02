@@ -1,4 +1,4 @@
-// Copied from the webmail (bulwarkmail/webmail 4887ed457, lib/plugin-secrets/credentials.ts)
+// Copied from the webmail (bulwarkmail/webmail 7cf733225, lib/plugin-secrets/credentials.ts)
 // by scripts/sync-webmail-compat.mjs. Do not edit; sync again instead.
 // @ts-nocheck
 /* eslint-disable */

@@ -1,4 +1,4 @@
-// Copied from the webmail (bulwarkmail/webmail 4887ed457, lib/theme-compiler.ts)
+// Copied from the webmail (bulwarkmail/webmail 7cf733225, lib/theme-compiler.ts)
 // by scripts/sync-webmail-compat.mjs. Do not edit; sync again instead.
 // @ts-nocheck
 /* eslint-disable */

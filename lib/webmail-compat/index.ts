@@ -32,7 +32,7 @@ export const LIMITS = {
 export const HIGH_RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   "crypto:full", "email:read", "email:send", "email:raw-send", "email:forward", "email:blob-read",
   "email:blob-write", "email:render-takeover", "http:fetch", "http:post",
-  "filters:write", "http:proxy", "identity:write", "vacation:write",
+  "filters:write", "http:proxy", "compose:check", "identity:write", "vacation:write",
 ]);
 
 export function permissionKey(perm: string): string {

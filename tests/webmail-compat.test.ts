@@ -18,6 +18,14 @@ describe("webmail compat", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("accepts compose:check from webmail 1.20 and marks it high risk", async () => {
+    expect(KNOWN_PERMISSIONS).toContain("compose:check");
+    expect(HIGH_RISK_PERMISSIONS.has("compose:check")).toBe(true);
+    const result = await checkBundle(await bundle(["compose:check", "http:proxy", "ui:settings-section"]), "plugin", "team-inbox");
+    expect(result.errors).toEqual([]);
+    expect(result.ok).toBe(true);
+  });
+
   it("marks forwarding mail as high risk, like the consent dialog", () => {
     expect(HIGH_RISK_PERMISSIONS.has("email:forward")).toBe(true);
   });
