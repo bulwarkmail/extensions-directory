@@ -1,4 +1,5 @@
-FROM node:22-alpine AS base
+# The Node major CI and the server use.
+FROM node:24-alpine AS base
 
 # Install dependencies
 FROM base AS deps
