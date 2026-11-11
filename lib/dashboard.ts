@@ -1,10 +1,12 @@
 // Data for the author dashboard and the admin pages (server components).
 // The staff readers below check the session themselves (requireStaff) and
 // throw without the role, whatever the page that calls them checked.
+// tests/admin-pages-auth.test.ts treats every export that isn't on its list
+// of readers for the signed-in author as a staff reader.
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "./db/client";
 import {
-  advisories, apiTokens, auditLog, authors, extensionMembers, extensions, extensionVersions, publishers, ratings, reports, submissions,
+  advisories, apiTokens, auditLog, authors, extensionMembers, extensions, publishers, ratings, reports, submissions,
   textChanges, webhooks, OPEN_STATUSES,
 } from "./db/schema";
 import { releasesOf } from "./catalog";
@@ -154,8 +156,4 @@ export async function auditEntries(opts: { action?: string; target?: string; pag
   const conds = [opts.action ? sql`${auditLog.action} like ${`${opts.action}%`}` : undefined, opts.target ? eq(auditLog.targetId, opts.target) : undefined].filter(Boolean);
   return db.select({ l: auditLog, login: authors.githubLogin }).from(auditLog).leftJoin(authors, eq(authors.id, auditLog.actorId))
     .where(conds.length ? and(...conds) : undefined).orderBy(desc(auditLog.id)).limit(100).offset((opts.page - 1) * 100).all();
-}
-
-export function versionOf(extensionId: string, version: string) {
-  return db.select().from(extensionVersions).where(and(eq(extensionVersions.extensionId, extensionId), eq(extensionVersions.version, version))).get() ?? null;
 }
