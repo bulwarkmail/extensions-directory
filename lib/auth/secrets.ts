@@ -5,6 +5,8 @@
 // characters, random, and unrelated to every value that was ever written out
 // in this repository, or nothing is sealed or hashed with it
 // (instrumentation.ts also refuses to start).
+import crypto from "crypto";
+
 const DEVELOPMENT = {
   AUTHOR_SESSION_SECRET: "complex_password_at_least_32_characters_long_for_dev",
   TOKEN_PEPPER: "dev-token-pepper",
@@ -81,17 +83,30 @@ function known(forms: string[]): KnownSet {
 const PLAIN = known(PUBLISHED);
 const BARE = known(PUBLISHED.map(lettersAndDigits));
 
+// The digests of every published value, as hex: of the value as written and
+// in upper case, with no line end, with "\n" and with "\r\n", under each of
+// the usual hash commands.
+const DIGESTS = ["md5", "sha1", "sha256", "sha384", "sha512"].filter((name) => crypto.getHashes().includes(name));
+const PUBLISHED_DIGESTS = new Set(
+  PUBLISHED.flatMap((p) => [p, p.toUpperCase()])
+    .flatMap((p) => [p, `${p}\n`, `${p}\r\n`])
+    .flatMap((text) => DIGESTS.map((name) => crypto.createHash(name).update(text).digest("hex")))
+);
+
+/** How often what a value decodes to is decoded again: an encoding of an encoding is still looked into. */
+const DECODE_DEPTH = 2;
+
 /**
- * The form a secret is judged in: without the byte order mark, spaces and
- * line ends a file adds, without one pair of quotes a loader left around it,
- * without invisible characters, in lower case.
+ * The form a secret is judged in, letter case kept: without the byte order
+ * mark, spaces and line ends a file adds, without one pair of quotes a loader
+ * left around it, without invisible characters.
  */
-function normalise(raw: string): string {
+function tidy(raw: string): string {
   const clean = (text: string) => text.replace(/[\u200B-\u200D\u2060\uFEFF]/g, "").trim();
   let value = clean(raw.normalize("NFKC"));
   const quote = value[0];
   if (value.length >= 2 && (quote === '"' || quote === "'") && value.endsWith(quote)) value = clean(value.slice(1, -1));
-  return value.toLowerCase();
+  return value;
 }
 
 /** True when the text is one block repeated, also when the last copy is cut short. */
@@ -136,15 +151,104 @@ function resembles(value: string, { texts, runs, byPair }: KnownSet): boolean {
   return texts.some((k, n) => shared[n] >= k.text.length - 1 - 2 * k.edits && holdsEdited(value, k));
 }
 
-/** What is wrong with a value as a production secret, or null. Never includes the value. */
-function problemOf(raw: string): string | null {
-  const value = normalise(raw);
-  if (value.length < 32) return "must be set to at least 32 characters";
-  // A generated secret has far more than 8 different characters (64 random
-  // hex digits have fewer than 8 about once in 10^19 tries).
-  if (new Set(value).size < 8 || repeatsBlock(value)) return "does not look random";
-  if (resembles(value, PLAIN) || resembles(lettersAndDigits(value), BARE)) return "is a value published with the source code, or close to one";
+const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
+
+function fromBase32(text: string): Buffer {
+  const bytes = Buffer.alloc(Math.floor((text.length * 5) / 8));
+  let held = 0;
+  let bits = 0;
+  let at = 0;
+  for (const c of text.toLowerCase()) {
+    held = (held << 5) | BASE32.indexOf(c);
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      bytes[at++] = held >> bits;
+      held &= (1 << bits) - 1;
+    }
+  }
+  return bytes;
+}
+
+/**
+ * The bytes a text stands for under each encoding it parses as: hex, base64
+ * in either alphabet with or without padding, base32. Line breaks an encoder
+ * put in don't count.
+ */
+function decodings(text: string): Buffer[] {
+  const packed = text.replace(/\s+/g, "");
+  const found: Buffer[] = [];
+  if (/^(?:[0-9a-f]{2})+$/i.test(packed)) found.push(Buffer.from(packed, "hex"));
+  const base64 = /^([a-z0-9+/_-]+)={0,2}$/i.exec(packed);
+  if (base64 && base64[1].length % 4 !== 1) found.push(Buffer.from(base64[1], "base64"));
+  const base32 = /^([a-z2-7]+)={0,6}$/i.exec(packed);
+  if (base32) found.push(fromBase32(base32[1]));
+  return found;
+}
+
+const utf8 = new TextDecoder("utf-8", { fatal: true });
+
+/** The bytes as text, or null when they are no text: not UTF-8, or with control characters other than tab and line ends. */
+function asText(bytes: Buffer): string | null {
+  let text: string;
+  try {
+    text = utf8.decode(bytes);
+  } catch {
+    return null;
+  }
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c === 127 || (c < 32 && c !== 9 && c !== 10 && c !== 13)) return null;
+  }
+  return text;
+}
+
+const PUBLISHED_VALUE = "is a value published with the source code, or close to one";
+const NOT_RANDOM = "does not look random";
+
+// A generated secret has far more than 8 different characters (64 random hex
+// digits have fewer than 8 about once in 10^19 tries).
+const lowVariety = (value: string) => new Set(value).size < 8 || repeatsBlock(value);
+
+/** True for a published value, anything close to one, and text that holds the digest of one as hex. */
+function published(value: string): boolean {
+  if (resembles(value, PLAIN) || resembles(lettersAndDigits(value), BARE)) return true;
+  return (value.match(/[0-9a-f]+/g) ?? []).some((run) => PUBLISHED_DIGESTS.has(run));
+}
+
+/**
+ * What is wrong with what a text decodes to, or null: the bytes are the digest
+ * of a published value, or they are text that is published, close to it or of
+ * low variety. Decoded text is decoded again `depth - 1` times.
+ */
+function decodedProblem(text: string, depth: number): string | null {
+  for (const bytes of decodings(text)) {
+    if (PUBLISHED_DIGESTS.has(bytes.toString("hex"))) return PUBLISHED_VALUE;
+    const decoded = asText(bytes);
+    if (decoded === null) continue;
+    const inner = tidy(decoded);
+    const value = inner.toLowerCase();
+    if (published(value)) return PUBLISHED_VALUE;
+    if (lowVariety(value)) return NOT_RANDOM;
+    const deeper = depth > 1 ? decodedProblem(inner, depth - 1) : null;
+    if (deeper) return deeper;
+  }
   return null;
+}
+
+/**
+ * What is wrong with a value as a production secret, or null. Never includes
+ * the value. This is where the rule ends: known published values, their plain
+ * encodings and digests, and low-variety values. Anything further is the
+ * operator's own choice of secret.
+ */
+function problemOf(raw: string): string | null {
+  const text = tidy(raw);
+  const value = text.toLowerCase();
+  if (value.length < 32) return "must be set to at least 32 characters";
+  if (lowVariety(value)) return NOT_RANDOM;
+  if (published(value)) return PUBLISHED_VALUE;
+  return decodedProblem(text, DECODE_DEPTH);
 }
 
 // The verdict on the value last seen per key, so that a use costs a lookup.

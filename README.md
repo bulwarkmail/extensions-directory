@@ -77,7 +77,7 @@ missing, shorter than 32 characters or obviously not random, the app answers eve
 error and the server log names the key and says why. The same goes for a value that was ever written
 out in this repository (an old example value, a development key, a secret from its tests) and for
 anything close to one: such a value with characters added, changed or left out, in quotes, with other
-separators or written backwards.
+separators or written backwards, and such a value run through base64, hex, base32 or a hash command.
 
 Changing the session secret signs everyone out once. Changing the token pepper makes every API token
 invalid, so their owners have to create new ones. Changing the salt starts the daily download counts
