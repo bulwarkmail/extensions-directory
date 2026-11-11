@@ -16,20 +16,37 @@ export interface SessionData {
   [key: string]: unknown;
 }
 
-const options: SessionOptions = {
-  password: process.env.AUTHOR_SESSION_SECRET || "complex_password_at_least_32_characters_long_for_dev",
-  cookieName: "ext_author_session",
-  ttl: 14 * 24 * 3600,
-  cookieOptions: {
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true,
-    sameSite: "lax" as const,
-  },
-};
+/**
+ * The key that seals the session cookie. In production it is
+ * AUTHOR_SESSION_SECRET with at least 32 characters, or no session is opened
+ * or issued (instrumentation.ts also refuses to start); development and tests
+ * fall back to a fixed key.
+ */
+export function sessionSecret(): string {
+  const secret = process.env.AUTHOR_SESSION_SECRET ?? "";
+  if (process.env.NODE_ENV === "production") {
+    if (secret.trim().length < 32) throw new Error("AUTHOR_SESSION_SECRET must be set to at least 32 characters");
+    return secret;
+  }
+  return secret.trim() ? secret : "complex_password_at_least_32_characters_long_for_dev";
+}
+
+function options(): SessionOptions {
+  return {
+    password: sessionSecret(),
+    cookieName: "ext_author_session",
+    ttl: 14 * 24 * 3600,
+    cookieOptions: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      sameSite: "lax" as const,
+    },
+  };
+}
 
 export async function getSession() {
   const store = await cookies();
-  return getIronSession<SessionData>(store as never, options);
+  return getIronSession<SessionData>(store as never, options());
 }
 
 export class HttpError extends Error {
@@ -67,13 +84,38 @@ export async function requireRole(role: Role): Promise<SessionUser> {
   return user;
 }
 
+/** The origin of an http(s) URL, or null for anything else. */
+function originOf(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The origin the browser sent the request to. Behind nginx, request.url
+ * carries the address Next listens on, so the host comes from the Host header
+ * nginx passes on; the scheme is the one Next took from the connection or
+ * X-Forwarded-Proto.
+ */
+function requestOrigin(request: Request): string | null {
+  const url = new URL(request.url);
+  return originOf(`${url.protocol}//${request.headers.get("host") ?? url.host}`);
+}
+
 /**
  * State-changing requests made with the cookie must come from our own pages.
  * SameSite=Lax already stops most cross-site posts; this closes the rest.
+ * The Origin header has to be NEXT_PUBLIC_SITE_URL's origin, or the
+ * request's own origin when that is unset. A write without an Origin, or a
+ * site URL that is no URL, is refused.
  */
 export function assertSameOrigin(request: Request): void {
   const site = process.env.NEXT_PUBLIC_SITE_URL;
-  const origin = request.headers.get("origin");
-  if (!site) return;
-  if (!origin || origin !== new URL(site).origin) throw new HttpError(403, "Cross-site request refused", "bad_origin");
+  const expected = site ? originOf(site) : requestOrigin(request);
+  const origin = originOf(request.headers.get("origin"));
+  if (!expected || !origin || origin !== expected) throw new HttpError(403, "Cross-site request refused", "bad_origin");
 }

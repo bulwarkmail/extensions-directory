@@ -14,7 +14,12 @@ export interface Actor {
 
 export const SYSTEM: Actor = { kind: "system" };
 
-const SALT = () => process.env.IP_HASH_SALT || process.env.AUTHOR_SESSION_SECRET || "extdir";
+/** IP_HASH_SALT, else the session secret; the fixed salt is for development and tests only. */
+function SALT(): string {
+  const salt = process.env.IP_HASH_SALT || process.env.AUTHOR_SESSION_SECRET;
+  if (!salt && process.env.NODE_ENV === "production") throw new Error("IP_HASH_SALT is not set");
+  return salt || "extdir";
+}
 
 /** Salted hash of a client IP; never stored in the clear. */
 export function hashIp(ip: string | null | undefined): string | null {
