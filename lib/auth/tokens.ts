@@ -4,7 +4,8 @@
 //
 // The checksum (CRC32 of the rest) catches typos without a database lookup
 // and lets secret scanners recognize the format. Only an HMAC of the whole
-// token is stored, keyed with TOKEN_PEPPER from .env.
+// token is stored, keyed with TOKEN_PEPPER from .env (checked in
+// lib/auth/secrets.ts).
 import crypto from "crypto";
 import zlib from "zlib";
 import { and, eq, inArray } from "drizzle-orm";
@@ -12,6 +13,7 @@ import { db } from "@/lib/db/client";
 import { apiTokenExtensions, apiTokens, extensions, type TokenScope } from "@/lib/db/schema";
 import { HttpError } from "./session";
 import { isBanned, loadAuthor, memberRole } from "./guard";
+import { ownSecret } from "./secrets";
 import { audit, type Actor } from "@/lib/audit";
 import { queueNotification } from "@/lib/notify";
 
@@ -40,14 +42,8 @@ function checksum(body: string): string {
   return base62(zlib.crc32(body), 6);
 }
 
-function pepper(): string {
-  const p = process.env.TOKEN_PEPPER;
-  if (!p && process.env.NODE_ENV === "production") throw new Error("TOKEN_PEPPER is not set");
-  return p || "dev-token-pepper";
-}
-
 export function hashToken(token: string): string {
-  return crypto.createHmac("sha256", pepper()).update(token).digest("hex");
+  return crypto.createHmac("sha256", ownSecret("TOKEN_PEPPER")).update(token).digest("hex");
 }
 
 export function looksLikeToken(token: string): boolean {

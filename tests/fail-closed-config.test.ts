@@ -9,8 +9,8 @@
 // throws) or when the session code refuses to open or save a session. The tests further
 // down check each of the two on its own.
 import { sealData } from "iron-session";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { freshSecret } from "./helpers/secrets";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { freshSecret, stubSecrets } from "./helpers/secrets";
 
 // The key the session code falls back to outside production.
 const SOURCE_CONSTANT = "complex_password_at_least_32_characters_long_for_dev";
@@ -20,6 +20,12 @@ beforeAll(async () => {
   const { db } = await import("@/lib/db/client");
   const schema = await import("@/lib/db/schema");
   await db.insert(schema.authors).values({ id: "boss", githubId: 6001, githubLogin: "boss", displayName: "Boss", role: "super_admin" });
+});
+
+// A production server also needs its token pepper and address-hash salt. Every test
+// starts with fresh ones and sets what it is about.
+beforeEach(() => {
+  stubSecrets({ AUTHOR_SESSION_SECRET: "" });
 });
 
 afterEach(() => {
@@ -225,7 +231,7 @@ describe("the salt for IP hashes", () => {
 
   it("production with IP_HASH_SALT hashes (control)", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("IP_HASH_SALT", "a-salt-for-the-test");
+    vi.stubEnv("IP_HASH_SALT", freshSecret());
     vi.resetModules();
     const { hashIp } = await import("@/lib/audit");
     expect(hashIp("192.0.2.1")).toMatch(/^[0-9a-f]{32}$/);

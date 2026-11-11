@@ -8,7 +8,8 @@
 // the same way. Outside production the app keeps working without a secret.
 import crypto from "crypto";
 import { sealData } from "iron-session";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { stubSecrets } from "./helpers/secrets";
 
 const DEV_KEY = "complex_password_at_least_32_characters_long_for_dev";
 const PUBLISHED: [string, string][] = [
@@ -23,6 +24,12 @@ beforeAll(async () => {
   const { db } = await import("@/lib/db/client");
   const schema = await import("@/lib/db/schema");
   await db.insert(schema.authors).values({ id: "boss", githubId: 6001, githubLogin: "boss", displayName: "Boss", role: "super_admin" });
+});
+
+// A production server also needs its token pepper and address-hash salt. Every test
+// starts with fresh ones and sets the session secret it is about.
+beforeEach(() => {
+  stubSecrets({ AUTHOR_SESSION_SECRET: "" });
 });
 
 afterEach(() => {

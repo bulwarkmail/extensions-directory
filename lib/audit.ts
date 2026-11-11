@@ -1,6 +1,7 @@
 // Append-only record of what staff, authors and machines did. No route
 // updates or deletes these rows.
 import crypto from "crypto";
+import { ownSecret } from "./auth/secrets";
 import { db } from "./db/client";
 import { auditLog } from "./db/schema";
 
@@ -14,17 +15,10 @@ export interface Actor {
 
 export const SYSTEM: Actor = { kind: "system" };
 
-/** IP_HASH_SALT, else the session secret; the fixed salt is for development and tests only. */
-function SALT(): string {
-  const salt = process.env.IP_HASH_SALT || process.env.AUTHOR_SESSION_SECRET;
-  if (!salt && process.env.NODE_ENV === "production") throw new Error("IP_HASH_SALT is not set");
-  return salt || "extdir";
-}
-
-/** Salted hash of a client IP; never stored in the clear. */
+/** Hash of a client IP, keyed with IP_HASH_SALT (checked in lib/auth/secrets.ts); never stored in the clear. */
 export function hashIp(ip: string | null | undefined): string | null {
   if (!ip) return null;
-  return crypto.createHmac("sha256", SALT()).update(ip.split(",")[0].trim()).digest("hex").slice(0, 32);
+  return crypto.createHmac("sha256", ownSecret("IP_HASH_SALT")).update(ip.split(",")[0].trim()).digest("hex").slice(0, 32);
 }
 
 export function clientIp(request: Request): string | null {

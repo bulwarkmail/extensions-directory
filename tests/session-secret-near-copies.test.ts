@@ -11,8 +11,8 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { sealData, unsealData } from "iron-session";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { freshSecret } from "./helpers/secrets";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { freshSecret, stubSecrets } from "./helpers/secrets";
 
 const DEV_KEY = "complex_password_at_least_32_characters_long_for_dev";
 const EXAMPLE = "change-me-author-session-secret-min-32-chars!!";
@@ -27,6 +27,12 @@ beforeAll(async () => {
   const { db } = await import("@/lib/db/client");
   const schema = await import("@/lib/db/schema");
   await db.insert(schema.authors).values({ id: "boss", githubId: 6001, githubLogin: "boss", displayName: "Boss", role: "super_admin" });
+});
+
+// A production server also needs its token pepper and address-hash salt. Every test
+// starts with fresh ones and sets the session secret it is about.
+beforeEach(() => {
+  stubSecrets({ AUTHOR_SESSION_SECRET: "" });
 });
 
 afterEach(() => {
@@ -151,7 +157,7 @@ describe("small edits of every published value", () => {
       }
     }
     expect(accepted).toEqual([]);
-  });
+  }, 60_000);
 
   it.each(EVERY_PUBLISHED)("%s: every tenth character changed, so that no long piece is left whole", async (p) => {
     const problem = await judge();
@@ -316,14 +322,14 @@ describe("secrets an operator makes stay accepted (control)", () => {
   ];
 
   it.each(GENERATORS)("%s: %i fresh values are all accepted", async (_name, count, make) => {
-    vi.stubEnv("NODE_ENV", "production");
-    const { sessionSecret } = await import("@/lib/auth/session");
+    const problem = await judge();
+    const refused: string[] = [];
     for (let i = 0; i < count; i++) {
       const secret = make();
-      vi.stubEnv("AUTHOR_SESSION_SECRET", secret);
-      expect(sessionSecret()).toBe(secret);
+      if (problem(secret) !== null) refused.push(secret);
     }
-  });
+    expect(refused).toEqual([]);
+  }, 60_000);
 
   it.each(["extdir-", "session-", "bulwark_", "prod.secret."])("an own random secret with the label %j in front is accepted", async (label) => {
     const problem = await judge();

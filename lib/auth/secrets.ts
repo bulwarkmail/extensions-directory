@@ -1,29 +1,36 @@
-// Keys an installation has to bring itself. With NODE_ENV development or test
-// a missing one falls back to a fixed value. Everywhere else the value must be
-// at least 32 characters, random, and unrelated to every value that was ever
-// written out in this repository, or nothing is sealed with it
+// Keys an installation has to bring itself: the secret that seals session
+// cookies, the pepper that keys the stored API token hashes and the salt that
+// keys the stored address hashes. With NODE_ENV development or test a missing
+// one falls back to a fixed value. Everywhere else each must be at least 32
+// characters, random, and unrelated to every value that was ever written out
+// in this repository, or nothing is sealed or hashed with it
 // (instrumentation.ts also refuses to start).
-export type SecretName = "AUTHOR_SESSION_SECRET";
-
-const DEVELOPMENT: Record<SecretName, string> = {
+const DEVELOPMENT = {
   AUTHOR_SESSION_SECRET: "complex_password_at_least_32_characters_long_for_dev",
+  TOKEN_PEPPER: "dev-token-pepper",
+  IP_HASH_SALT: "extdir",
 };
+
+export type SecretName = keyof typeof DEVELOPMENT;
 
 // Every value this repository ever held for one of these keys: the defaults in
 // the source, the lines of .env.example and the secrets its tests used. All of
 // them are public, so neither they nor anything close to them counts as an
-// installation's own secret. A test that needs a refused value takes one from
-// here. Lower case.
+// installation's own secret, whichever key it is set for. A test that needs a
+// refused value takes one from here. Lower case.
 const PUBLISHED: string[] = [
   // Defaults in the source.
-  DEVELOPMENT.AUTHOR_SESSION_SECRET,
+  ...Object.values(DEVELOPMENT),
   "complex_admin_password_at_least_32_chars_for_dev",
   // .env.example.
   "change-me-author-session-secret-min-32-chars!!",
   "change-me-admin-session-secret-min-32-chars!!!",
+  "change-me-random-hex",
   // Tests.
   "http-test-session-secret-0123456789abcdef",
   "a-real-secret-of-more-than-32-characters-0123",
+  "http-test-pepper",
+  "a-salt-for-the-test",
   "short-secret-0123456789",
   "0123456789abcdef".repeat(4),
   "my-secret-".repeat(4).slice(0, 36),
@@ -152,6 +159,12 @@ export function secretProblem(name: SecretName): string | null {
     judged.set(name, verdict);
   }
   return verdict.problem && `${name} ${verdict.problem}. Generate one with: openssl rand -hex 32`;
+}
+
+/** What is wrong with any of the keys outside development and tests: one sentence per key. */
+export function secretProblems(): string[] {
+  if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") return [];
+  return (Object.keys(DEVELOPMENT) as SecretName[]).map(secretProblem).filter((problem) => problem !== null);
 }
 
 /**
