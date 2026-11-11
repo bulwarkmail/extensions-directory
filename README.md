@@ -71,9 +71,11 @@ the last five releases and ten database backups. `.env`, `data/` and `keys/` liv
 `/opt/extension-directory` and are shared by every release.
 
 In production the web app needs its own `AUTHOR_SESSION_SECRET` in `.env`, made with
-`openssl rand -hex 32`. It does not start when the secret is missing, shorter than 32 characters, one
-of the values published with the code (the old example value or a development key), or obviously not
-random. Changing the secret signs everyone out once.
+`openssl rand -hex 32`. When the secret is missing, shorter than 32 characters or obviously not random,
+the app answers every request with an error and the server log says why. The same goes for a value
+that was ever written out in this repository (the old example value, a development key, a secret from
+its tests) and for anything close to one: such a value with characters added, changed or left out, in
+quotes, with other separators or written backwards. Changing the secret signs everyone out once.
 
 The workflow needs the `production` environment secret `DEPLOY_SSH_KEY` and the repository variables
 `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_UMAMI_WEBSITE_ID` and `NEXT_PUBLIC_UMAMI_SCRIPT_URL`, which are

@@ -15,9 +15,10 @@ import path from "path";
 import { sealData } from "iron-session";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ADMIN_ROUTES, seedAdminData, type AdminRoute } from "../helpers/admin-seed";
+import { freshSecret } from "../helpers/secrets";
 
 const ROOT = path.join(import.meta.dirname, "..", "..");
-const SECRET = "http-test-session-secret-0123456789abcdef";
+const SECRET = freshSecret();
 let server: ChildProcess | null = null;
 let port = 0;
 let log = "";

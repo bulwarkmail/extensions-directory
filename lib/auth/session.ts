@@ -7,6 +7,7 @@ import { getIronSession, type SessionOptions } from "iron-session";
 import { cookies } from "next/headers";
 import type { Role } from "@/lib/db/schema";
 import { isBanned, isOrg, loadAuthor } from "./guard";
+import { ownSecret } from "./secrets";
 
 export interface SessionData {
   authorId?: string;
@@ -16,52 +17,13 @@ export interface SessionData {
   [key: string]: unknown;
 }
 
-const DEVELOPMENT_KEY = "complex_password_at_least_32_characters_long_for_dev";
-
-// Values published with the code as a session secret or its development
-// fallback (lib/auth.ts, lib/auth/session.ts, .env.example). Anyone can seal
-// a cookie with them, so outside development and tests they count as no
-// secret. Lower case; compared after trimming, ignoring case.
-const PUBLISHED_SECRETS = new Set([
-  DEVELOPMENT_KEY,
-  "complex_admin_password_at_least_32_chars_for_dev",
-  "change-me-author-session-secret-min-32-chars!!",
-  "change-me-admin-session-secret-min-32-chars!!!",
-]);
-
-/** True when the text is one block repeated, also when the last copy is cut short. */
-function repeatsBlock(text: string): boolean {
-  for (let period = 1; period <= text.length / 2; period++) {
-    let i = period;
-    while (i < text.length && text[i] === text[i - period]) i++;
-    if (i === text.length) return true;
-  }
-  return false;
-}
-
-/** What is wrong with a secret for production, or null. Never includes the value. */
-function secretProblem(secret: string): string | null {
-  const value = secret.trim();
-  if (value.length < 32) return "must be set to at least 32 characters";
-  if (PUBLISHED_SECRETS.has(value.toLowerCase())) return "is a value published with the source code";
-  // A generated secret has far more than 8 different characters (64 random
-  // hex digits have fewer than 8 about once in 10^19 tries).
-  if (new Set(value).size < 8 || repeatsBlock(value)) return "does not look random";
-  return null;
-}
-
 /**
- * The key that seals the session cookie. With NODE_ENV development or test it
- * falls back to a fixed key; everywhere else it is AUTHOR_SESSION_SECRET, which
- * must be at least 32 random characters of the installation's own, or no
- * session is opened or issued (instrumentation.ts also refuses to start).
+ * The key that seals the session cookie: AUTHOR_SESSION_SECRET, checked on
+ * every use (lib/auth/secrets.ts). Without a value that passes, no session is
+ * opened or issued.
  */
 export function sessionSecret(): string {
-  const secret = process.env.AUTHOR_SESSION_SECRET ?? "";
-  if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") return secret.trim() ? secret : DEVELOPMENT_KEY;
-  const problem = secretProblem(secret);
-  if (problem) throw new Error(`AUTHOR_SESSION_SECRET ${problem}. Generate one with: openssl rand -hex 32`);
-  return secret;
+  return ownSecret("AUTHOR_SESSION_SECRET");
 }
 
 function options(): SessionOptions {

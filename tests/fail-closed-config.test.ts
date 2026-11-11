@@ -10,6 +10,7 @@
 // down check each of the two on its own.
 import { sealData } from "iron-session";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { freshSecret } from "./helpers/secrets";
 
 // The key the session code falls back to outside production.
 const SOURCE_CONSTANT = "complex_password_at_least_32_characters_long_for_dev";
@@ -81,7 +82,7 @@ describe("production settings that are missing", () => {
   });
 
   it("a real secret still works in production (control)", async () => {
-    const secret = "a-real-secret-of-more-than-32-characters-0123";
+    const secret = freshSecret();
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("AUTHOR_SESSION_SECRET", secret);
     vi.resetModules();
