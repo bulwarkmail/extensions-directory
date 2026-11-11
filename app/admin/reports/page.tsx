@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { staffPage } from "@/lib/auth/staff";
 import { allReports } from "@/lib/dashboard";
 import { timeAgo } from "@/lib/utils";
 import { Status } from "@/components/status";
@@ -8,8 +9,9 @@ import { ActionButton } from "@/components/client/action";
 export const metadata: Metadata = { title: "Reports" };
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  await staffPage("reviewer");
   const status = (await searchParams).status ?? "open";
-  const rows = allReports(status);
+  const rows = await allReports(status);
   return (
     <div>
       <h1 className="bw-h2">Abuse reports</h1>

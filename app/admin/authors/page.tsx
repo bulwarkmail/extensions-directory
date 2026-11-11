@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { currentUser, hasRole } from "@/lib/auth/session";
+import { staffPage } from "@/lib/auth/staff";
 import { allAuthors } from "@/lib/dashboard";
 import { formatDate } from "@/lib/utils";
 import { Status } from "@/components/status";
@@ -9,10 +9,9 @@ import { ActionButton } from "@/components/client/action";
 export const metadata: Metadata = { title: "Authors" };
 
 export default async function AdminAuthors({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const user = await currentUser();
-  if (!user || !hasRole(user.role, "admin")) return <p>Admins only.</p>;
+  const user = await staffPage("admin");
   const q = (await searchParams).q;
-  const rows = allAuthors(q);
+  const rows = await allAuthors(q);
   return (
     <div>
       <h1 className="bw-h2">Accounts</h1>

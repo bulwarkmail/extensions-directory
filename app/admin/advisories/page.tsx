@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { staffPage } from "@/lib/auth/staff";
 import { allAdvisories } from "@/lib/dashboard";
 import { formatDate } from "@/lib/utils";
 import { Status } from "@/components/status";
@@ -6,8 +7,9 @@ import { ActionButton, ActionForm } from "@/components/client/action";
 
 export const metadata: Metadata = { title: "Advisories" };
 
-export default function AdvisoriesPage() {
-  const rows = allAdvisories();
+export default async function AdvisoriesPage() {
+  await staffPage("reviewer");
+  const rows = await allAdvisories();
   return (
     <div>
       <h1 className="bw-h2">Security advisories</h1>

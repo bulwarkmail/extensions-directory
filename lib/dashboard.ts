@@ -1,4 +1,6 @@
 // Data for the author dashboard and the admin pages (server components).
+// The staff readers below check the session themselves (requireStaff) and
+// throw without the role, whatever the page that calls them checked.
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "./db/client";
 import {
@@ -12,6 +14,7 @@ import { tokensOf } from "./auth/tokens";
 import { downloadsByDay } from "./downloads";
 import type { SessionUser } from "./auth/session";
 import { hasRole } from "./auth/session";
+import { requireStaff } from "./auth/staff";
 
 export function myExtensions(userId: string) {
   const rows = extensionsManagedBy(userId);
@@ -74,7 +77,8 @@ export function myWebhooks(userId: string) {
   return db.select({ id: webhooks.id, url: webhooks.url, events: webhooks.events, lastDeliveryAt: webhooks.lastDeliveryAt, lastStatus: webhooks.lastStatus }).from(webhooks).where(eq(webhooks.authorId, userId)).all();
 }
 
-export function adminCounts() {
+export async function adminCounts() {
+  await requireStaff("reviewer");
   const n = (q: ReturnType<typeof sql>) => (db.get(q) as { n: number }).n;
   return {
     awaitingReview: n(sql`select count(*) n from submissions where status = 'awaiting_review' and dry_run = 0`),
@@ -87,47 +91,66 @@ export function adminCounts() {
   };
 }
 
-export function reviewQueue(status: string) {
+export async function reviewQueue(status: string) {
+  await requireStaff("reviewer");
   return db.select({ s: submissions, login: authors.githubLogin, name: extensions.name, extStatus: extensions.status })
     .from(submissions).leftJoin(authors, eq(authors.id, submissions.authorId)).leftJoin(extensions, eq(extensions.id, submissions.extensionId))
     .where(and(status === "all" ? undefined : eq(submissions.status, status as "queued"), eq(submissions.dryRun, false)))
     .orderBy(status === "awaiting_review" ? submissions.submittedAt : desc(submissions.submittedAt)).limit(200).all();
 }
 
-export function pendingTextChanges() {
+/** A submission with its submitter and extension, for the review page. */
+export async function submissionForReview(id: string) {
+  await requireStaff("reviewer");
+  const s = db.select().from(submissions).where(eq(submissions.id, id)).get();
+  if (!s) return null;
+  const author = db.select().from(authors).where(eq(authors.id, s.authorId)).get();
+  const ext = s.extensionId ? db.select().from(extensions).where(eq(extensions.id, s.extensionId)).get() : null;
+  return { s, author, ext };
+}
+
+export async function pendingTextChanges() {
+  await requireStaff("reviewer");
   return db.select({ t: textChanges, slug: extensions.slug, login: authors.githubLogin }).from(textChanges)
     .innerJoin(extensions, eq(extensions.id, textChanges.extensionId)).leftJoin(authors, eq(authors.id, textChanges.proposedBy))
     .where(eq(textChanges.status, "pending")).orderBy(textChanges.proposedAt).all();
 }
 
-export function allExtensions() {
+export async function allExtensions() {
+  await requireStaff("reviewer");
   return db.select({ e: extensions, login: authors.githubLogin }).from(extensions).leftJoin(authors, eq(authors.id, extensions.authorId)).orderBy(desc(extensions.updatedAt)).all();
 }
 
-export function allAuthors(q?: string) {
+export async function allAuthors(q?: string) {
+  await requireStaff("admin");
   const rows = db.select().from(authors).where(q ? sql`${authors.githubLogin} like ${`%${q}%`}` : undefined).orderBy(desc(authors.createdAt)).limit(500).all();
   return rows.map((a) => ({ ...a, members: a.kind === "org" ? orgMembersOf(a.id) : null }));
 }
 
-export function allReports(status: string) {
+export async function allReports(status: string) {
+  await requireStaff("reviewer");
   return db.select({ r: reports, slug: extensions.slug }).from(reports).innerJoin(extensions, eq(extensions.id, reports.extensionId))
     .where(status === "all" ? undefined : eq(reports.status, status as "open")).orderBy(desc(reports.createdAt)).limit(300).all();
 }
 
-export function allRatings() {
+export async function allRatings() {
+  await requireStaff("reviewer");
   return db.select({ r: ratings, slug: extensions.slug, login: authors.githubLogin }).from(ratings)
     .innerJoin(extensions, eq(extensions.id, ratings.extensionId)).innerJoin(authors, eq(authors.id, ratings.authorId)).orderBy(desc(ratings.updatedAt)).limit(300).all();
 }
 
-export function allAdvisories() {
+export async function allAdvisories() {
+  await requireStaff("reviewer");
   return db.select({ a: advisories, slug: extensions.slug }).from(advisories).innerJoin(extensions, eq(extensions.id, advisories.extensionId)).orderBy(desc(advisories.createdAt)).all();
 }
 
-export function allTokens() {
+export async function allTokens() {
+  await requireStaff("admin");
   return db.select({ t: apiTokens, login: authors.githubLogin }).from(apiTokens).innerJoin(authors, eq(authors.id, apiTokens.authorId)).orderBy(desc(apiTokens.createdAt)).limit(500).all();
 }
 
-export function auditEntries(opts: { action?: string; target?: string; page: number }) {
+export async function auditEntries(opts: { action?: string; target?: string; page: number }) {
+  await requireStaff("admin");
   const conds = [opts.action ? sql`${auditLog.action} like ${`${opts.action}%`}` : undefined, opts.target ? eq(auditLog.targetId, opts.target) : undefined].filter(Boolean);
   return db.select({ l: auditLog, login: authors.githubLogin }).from(auditLog).leftJoin(authors, eq(authors.id, auditLog.actorId))
     .where(conds.length ? and(...conds) : undefined).orderBy(desc(auditLog.id)).limit(100).offset((opts.page - 1) * 100).all();

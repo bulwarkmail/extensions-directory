@@ -1,16 +1,15 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { currentUser, hasRole } from "@/lib/auth/session";
+import { staffPage } from "@/lib/auth/staff";
 import { auditEntries } from "@/lib/dashboard";
 
 export const metadata: Metadata = { title: "Audit log" };
 
 export default async function AuditPage({ searchParams }: { searchParams: Promise<{ action?: string; target?: string; page?: string }> }) {
-  const user = await currentUser();
-  if (!user || !hasRole(user.role, "admin")) return <p>Admins only.</p>;
+  await staffPage("admin");
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
-  const rows = auditEntries({ action: sp.action, target: sp.target, page });
+  const rows = await auditEntries({ action: sp.action, target: sp.target, page });
   return (
     <div>
       <h1 className="bw-h2">Audit log</h1>

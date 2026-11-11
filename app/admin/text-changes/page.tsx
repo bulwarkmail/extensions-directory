@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { staffPage } from "@/lib/auth/staff";
 import { pendingTextChanges } from "@/lib/dashboard";
 import { renderMarkdown } from "@/lib/markdown";
 import { timeAgo } from "@/lib/utils";
@@ -6,8 +7,9 @@ import { ActionButton } from "@/components/client/action";
 
 export const metadata: Metadata = { title: "Text changes" };
 
-export default function TextChangesPage() {
-  const rows = pendingTextChanges();
+export default async function TextChangesPage() {
+  await staffPage("reviewer");
+  const rows = await pendingTextChanges();
   return (
     <div>
       <h1 className="bw-h2">Text changes</h1>

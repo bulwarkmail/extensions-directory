@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { staffPage } from "@/lib/auth/staff";
 import { allExtensions } from "@/lib/dashboard";
 import { formatDate } from "@/lib/utils";
 import { Status } from "@/components/status";
@@ -7,8 +8,9 @@ import { ActionButton } from "@/components/client/action";
 
 export const metadata: Metadata = { title: "Extensions" };
 
-export default function AdminExtensions() {
-  const rows = allExtensions();
+export default async function AdminExtensions() {
+  await staffPage("reviewer");
+  const rows = await allExtensions();
   return (
     <div>
       <h1 className="bw-h2">Extensions</h1>

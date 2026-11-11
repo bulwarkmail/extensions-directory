@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { currentUser, hasRole } from "@/lib/auth/session";
+import { staffPage } from "@/lib/auth/staff";
 import { allTokens } from "@/lib/dashboard";
 import { formatDate, timeAgo } from "@/lib/utils";
 import { Status } from "@/components/status";
@@ -8,9 +8,8 @@ import { ActionButton } from "@/components/client/action";
 export const metadata: Metadata = { title: "API tokens" };
 
 export default async function AdminTokens() {
-  const user = await currentUser();
-  if (!user || !hasRole(user.role, "admin")) return <p>Admins only.</p>;
-  const rows = allTokens();
+  await staffPage("admin");
+  const rows = await allTokens();
   return (
     <div>
       <h1 className="bw-h2">API tokens</h1>

@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
+import { staffPage } from "@/lib/auth/staff";
 import { allRatings } from "@/lib/dashboard";
 import { timeAgo } from "@/lib/utils";
 import { ActionButton } from "@/components/client/action";
 
 export const metadata: Metadata = { title: "Ratings" };
 
-export default function RatingsPage() {
-  const rows = allRatings();
+export default async function RatingsPage() {
+  await staffPage("reviewer");
+  const rows = await allRatings();
   return (
     <div>
       <h1 className="bw-h2">Ratings</h1>

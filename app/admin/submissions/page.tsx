@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { staffPage } from "@/lib/auth/staff";
 import { reviewQueue } from "@/lib/dashboard";
 import { timeAgo } from "@/lib/utils";
 import { Status } from "@/components/status";
@@ -18,8 +19,9 @@ const FILTERS = [
 ];
 
 export default async function ReviewQueue({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  await staffPage("reviewer");
   const status = (await searchParams).status ?? "awaiting_review";
-  const rows = reviewQueue(status);
+  const rows = await reviewQueue(status);
   return (
     <div>
       <h1 className="bw-h2">Review queue</h1>

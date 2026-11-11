@@ -1,11 +1,13 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { staffPage } from "@/lib/auth/staff";
 import { adminCounts } from "@/lib/dashboard";
 
 export const metadata: Metadata = { title: "Admin" };
 
-export default function AdminOverview() {
-  const c = adminCounts();
+export default async function AdminOverview() {
+  await staffPage("reviewer");
+  const c = await adminCounts();
   const tiles = [
     { href: "/admin/submissions", n: c.awaitingReview, label: "versions waiting for review" },
     { href: "/admin/submissions?status=building", n: c.building, label: "builds queued or running" },

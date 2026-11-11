@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { eq } from "drizzle-orm";
-import { db } from "@/lib/db/client";
-import { authors, submissions, extensions } from "@/lib/db/schema";
+import { staffPage } from "@/lib/auth/staff";
+import { submissionForReview } from "@/lib/dashboard";
 import { readStaged } from "@/lib/pipeline/staging";
 import { readZipFiles } from "@/lib/pipeline/diff";
 import { formatBytes } from "@/lib/utils";
@@ -16,11 +15,11 @@ export const metadata: Metadata = { title: "Review" };
 export const dynamic = "force-dynamic";
 
 export default async function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
+  await staffPage("reviewer");
   const { id } = await params;
-  const s = db.select().from(submissions).where(eq(submissions.id, id)).get();
-  if (!s) notFound();
-  const author = db.select().from(authors).where(eq(authors.id, s.authorId)).get();
-  const ext = s.extensionId ? db.select().from(extensions).where(eq(extensions.id, s.extensionId)).get() : null;
+  const data = await submissionForReview(id);
+  if (!data) notFound();
+  const { s, author, ext } = data;
   let files: { name: string; size: number }[] = [];
   if (s.artifactPath) {
     try {
