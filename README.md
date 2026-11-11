@@ -70,6 +70,11 @@ The same workflow has a **rollback** action that switches to the previous releas
 the last five releases and ten database backups. `.env`, `data/` and `keys/` live in
 `/opt/extension-directory` and are shared by every release.
 
+In production the web app needs its own `AUTHOR_SESSION_SECRET` in `.env`, made with
+`openssl rand -hex 32`. It does not start when the secret is missing, shorter than 32 characters, one
+of the values published with the code (the old example value or a development key), or obviously not
+random. Changing the secret signs everyone out once.
+
 The workflow needs the `production` environment secret `DEPLOY_SSH_KEY` and the repository variables
 `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_UMAMI_WEBSITE_ID` and `NEXT_PUBLIC_UMAMI_SCRIPT_URL`, which are
 built into the page.
