@@ -15,9 +15,10 @@ import path from "path";
 import { sealData } from "iron-session";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ADMIN_ROUTES, seedAdminData, type AdminRoute } from "../helpers/admin-seed";
+import { freshSecret } from "../helpers/secrets";
 
 const ROOT = path.join(import.meta.dirname, "..", "..");
-const SECRET = "http-test-session-secret-0123456789abcdef";
+const SECRET = freshSecret();
 let server: ChildProcess | null = null;
 let port = 0;
 let log = "";
@@ -69,7 +70,7 @@ beforeAll(async () => {
   port = await freePort();
   server = spawn(process.execPath, [path.join(ROOT, "node_modules", "next", "dist", "bin", "next"), "start", "-p", String(port), "-H", "127.0.0.1"], {
     cwd: ROOT,
-    env: { ...process.env, NODE_ENV: "production", AUTHOR_SESSION_SECRET: SECRET, TOKEN_PEPPER: "http-test-pepper", NEXT_PUBLIC_SITE_URL: `http://127.0.0.1:${port}`, NEXT_TELEMETRY_DISABLED: "1" },
+    env: { ...process.env, NODE_ENV: "production", AUTHOR_SESSION_SECRET: SECRET, TOKEN_PEPPER: freshSecret(), IP_HASH_SALT: freshSecret(), NEXT_PUBLIC_SITE_URL: `http://127.0.0.1:${port}`, NEXT_TELEMETRY_DISABLED: "1" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout?.on("data", (c) => (log += c));

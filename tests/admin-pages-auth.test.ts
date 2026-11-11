@@ -8,13 +8,42 @@
 // The test calls each page component the way Next does and looks at everything it
 // returned (the element tree with its props). Without the role the route needs, none of
 // the seeded staff-only text may be in it. A page that throws (redirect, notFound, an
-// HttpError) passes. The route table is checked against the files under app/admin, so a
-// new page fails this test until it is added to the table.
+// HttpError) passes. The tables of pages and other route files are checked against the
+// files under app/admin, and the reader table against the exports of lib/dashboard.ts, so
+// a new page, route handler, layout or reader fails this test until it is added.
 import fs from "fs";
 import path from "path";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { signIn, signOut } from "./helpers/session";
 import { ADMIN_ROUTES, MARK, SUB_ID, seedAdminData, type AdminRoute } from "./helpers/admin-seed";
+
+// Files Next serves a request from: pages, route handlers, layouts and the other special
+// files, and metadata routes. Plain components next to them (nav.tsx, files.tsx) are not.
+const ROUTE_FILE = /^(page|route|layout|template|default|loading|error|global-error|not-found|forbidden|unauthorized|opengraph-image|twitter-image|icon|apple-icon|sitemap|robots|manifest)\.(tsx|ts|jsx|js|mdx)$/;
+const SOURCE_EXT = /\.(tsx|ts|jsx|js|mdx)$/;
+const ADMIN_DIR = path.join(import.meta.dirname, "..", "app", "admin");
+
+/** Every route file under app/admin, relative to it, with forward slashes. */
+function routeFiles(dir = ADMIN_DIR): string[] {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? routeFiles(path.join(dir, e.name)) : ROUTE_FILE.test(e.name) ? [path.relative(ADMIN_DIR, path.join(dir, e.name)).replace(/\\/g, "/")] : []
+  );
+}
+
+const isPage = (file: string) => /(^|\/)page\.\w+$/.test(file);
+const FOUND = routeFiles().sort();
+const FOUND_PAGES = FOUND.filter(isPage);
+const FOUND_OTHERS = FOUND.filter((f) => !isPage(f));
+
+// Route files under app/admin other than pages, with the URL they answer. Each is called
+// below without a staff session; a new one fails "every other route file is listed" until
+// someone has looked at it and added it here.
+const OTHER_ROUTE_FILES: { file: string; url: string }[] = [
+  { file: "layout.tsx", url: "/admin" },
+];
+
+const ALL_MARKS = Object.values(MARK);
+const CHILD = "CHILD-PAGE-SENTINEL";
 
 /** Everything a page handed back: text, props of child components, attributes. */
 function collect(value: unknown, seen: WeakSet<object>, out: string[]): void {
@@ -42,17 +71,51 @@ async function rendered(run: () => unknown): Promise<string> {
   }
 }
 
+const load = (file: string) => import(/* @vite-ignore */ `@/app/admin/${file.replace(SOURCE_EXT, "")}`);
+
 /** Calls the page of a route with the props Next would give it for the route's URL. */
 async function open(route: AdminRoute): Promise<unknown> {
-  const mod = await import(/* @vite-ignore */ `@/app/admin/${route.file.replace(/\.tsx$/, "")}`);
+  const mod = await load(route.file);
   const query = Object.fromEntries(new URL(route.url, "https://extensions.test").searchParams);
   return mod.default({ params: Promise.resolve({ id: SUB_ID }), searchParams: Promise.resolve(query) });
 }
 
-function pageFiles(dir: string, base = dir): string[] {
-  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-    e.isDirectory() ? pageFiles(path.join(dir, e.name), base) : e.name === "page.tsx" ? [path.relative(base, path.join(dir, e.name)).replace(/\\/g, "/")] : []
-  );
+/** The props Next hands any admin route file, with the queries that show the most. */
+const ANY_PROPS = () => ({
+  children: CHILD,
+  params: Promise.resolve({ id: SUB_ID }),
+  searchParams: Promise.resolve({ status: "all" }),
+  error: new Error("test"),
+  reset: () => {},
+});
+
+/**
+ * Everything a route file answers for a URL: the body of every HTTP method a route
+ * handler exports, or what the default export of any other file returns (the body, when
+ * that is a Response).
+ */
+async function answer(file: string, url: string): Promise<string> {
+  const mod = (await load(file)) as Record<string, unknown>;
+  const parts: string[] = [];
+  const text = async (run: () => unknown) => {
+    try {
+      const out = await run();
+      return out instanceof Response ? await out.text() : await rendered(() => out);
+    } catch {
+      return "";
+    }
+  };
+  if (/(^|\/)route\.\w+$/.test(file)) {
+    for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+      const handler = mod[method];
+      if (typeof handler !== "function") continue;
+      parts.push(await text(() => handler(new Request(new URL(url, "https://extensions.test"), { method }), { params: Promise.resolve({ id: SUB_ID }) })));
+    }
+  } else if (typeof mod.default === "function") {
+    const render = mod.default as (props: unknown) => unknown;
+    parts.push(await text(() => render(ANY_PROPS())));
+  }
+  return parts.join(" | ");
 }
 
 const STAFF = { reviewer: "rev", admin: "boss" } as const;
@@ -72,8 +135,51 @@ beforeEach(() => signOut());
 
 describe("admin pages check the role themselves", () => {
   it("the route table lists every page under app/admin", () => {
-    const found = pageFiles(path.join(import.meta.dirname, "..", "app", "admin")).sort();
-    expect(found).toEqual(ADMIN_ROUTES.map((r) => r.file).sort());
+    expect(FOUND_PAGES).toEqual(ADMIN_ROUTES.map((r) => r.file).sort());
+  });
+
+  it("every other route file under app/admin is listed", () => {
+    expect(FOUND_OTHERS).toEqual(OTHER_ROUTE_FILES.map((r) => r.file).sort());
+  });
+
+  it.each(FOUND_PAGES)("%s gives a visitor and a signed-in author none of the seeded staff data", async (file) => {
+    const route = ADMIN_ROUTES.find((r) => r.file === file);
+    for (const who of [null, "mallory"]) {
+      signOut();
+      if (who) await signIn(who);
+      const out = await answer(file, route?.url ?? "/admin");
+      for (const m of ALL_MARKS) expect(out).not.toContain(m);
+    }
+  });
+
+  it.each(FOUND_OTHERS)("%s answers a visitor and a signed-in author with none of the seeded staff data", async (file) => {
+    const url = OTHER_ROUTE_FILES.find((r) => r.file === file)?.url ?? "/admin";
+    for (const who of [null, "mallory"]) {
+      signOut();
+      if (who) await signIn(who);
+      const out = await answer(file, url);
+      for (const m of ALL_MARKS) expect(out).not.toContain(m);
+    }
+  });
+
+  it("the admin layout passes its page through for staff only (control)", async () => {
+    expect(await answer("layout.tsx", "/admin")).not.toContain(CHILD);
+    await signIn("mallory");
+    expect(await answer("layout.tsx", "/admin")).not.toContain(CHILD);
+    await signIn("rev");
+    expect(await answer("layout.tsx", "/admin")).toContain(CHILD);
+  });
+
+  // Next resolves a route's metadata apart from its component, so a generateMetadata
+  // export runs for every visitor whatever the page checks.
+  it.each(FOUND)("%s: its metadata gives a visitor and a signed-in author none of the seeded staff data", async (file) => {
+    const mod = (await load(file)) as { metadata?: unknown; generateMetadata?: (props: unknown, parent: unknown) => unknown };
+    for (const who of [null, "mallory"]) {
+      signOut();
+      if (who) await signIn(who);
+      const out = [await rendered(() => mod.metadata), await rendered(() => mod.generateMetadata?.(ANY_PROPS(), Promise.resolve({})))].join(" | ");
+      for (const m of ALL_MARKS) expect(out).not.toContain(m);
+    }
   });
 
   it.each(ADMIN_ROUTES)("$url shows its data to the role it is for (control)", async (route) => {
@@ -159,6 +265,14 @@ describe("admin pages with any ?status=", () => {
 
 // The staff readers in lib/dashboard.ts are what the pages call. They check the session
 // themselves, so a page that forgets its own check still gets nothing.
+//
+// The module's other exports read for the signed-in author: they take the caller's id or
+// session user, and the dashboard pages pass their own. Every export not listed here is
+// treated as a staff reader.
+const AUTHOR_READERS = ["myExtensions", "mySubmissions", "manageData", "submissionFor", "myTokens", "downloadsLast30", "myWebhooks"];
+const dashboard = (await import("@/lib/dashboard")) as unknown as Record<string, unknown>;
+const STAFF_EXPORTS = Object.keys(dashboard).filter((name) => typeof dashboard[name] === "function" && !AUTHOR_READERS.includes(name)).sort();
+
 const READERS: { name: string; args: unknown[]; needs: "reviewer" | "admin"; marks: string[] }[] = [
   { name: "reviewQueue", args: ["all"], needs: "reviewer", marks: [MARK.queued] },
   { name: "allReports", args: ["all"], needs: "reviewer", marks: [MARK.reporter] },
@@ -174,10 +288,22 @@ const READERS: { name: string; args: unknown[]; needs: "reviewer" | "admin"; mar
 
 describe("staff data readers check the role themselves", () => {
   const call = async (name: string, args: unknown[]) => {
-    const dashboard = (await import("@/lib/dashboard")) as unknown as Record<string, (...a: unknown[]) => unknown>;
     expect(typeof dashboard[name]).toBe("function");
-    return rendered(() => dashboard[name](...args));
+    return rendered(() => (dashboard[name] as (...a: unknown[]) => unknown)(...args));
   };
+
+  it("every staff reader lib/dashboard.ts exports is in the reader table", () => {
+    expect(STAFF_EXPORTS).toEqual([...READERS.map((r) => r.name), "adminCounts"].sort());
+  });
+
+  it.each(STAFF_EXPORTS)("%s refuses a visitor, a signed-in author and a banned admin before it reads anything", async (name) => {
+    for (const who of [null, "mallory", "banned-boss"]) {
+      signOut();
+      if (who) await signIn(who);
+      // No arguments: the role check comes first, so the refusal can't depend on them.
+      await expect((async () => (dashboard[name] as () => unknown)())()).rejects.toMatchObject({ status: 403 });
+    }
+  });
 
   it.each(READERS)("$name answers the role it is for (control)", async ({ name, args, needs, marks }) => {
     await signIn(STAFF[needs]);

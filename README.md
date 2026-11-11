@@ -70,6 +70,19 @@ The same workflow has a **rollback** action that switches to the previous releas
 the last five releases and ten database backups. `.env`, `data/` and `keys/` live in
 `/opt/extension-directory` and are shared by every release.
 
+In production the web app needs three keys of its own in `.env`, each made with
+`openssl rand -hex 32`: `AUTHOR_SESSION_SECRET` seals the session cookie, `TOKEN_PEPPER` keys the stored
+hashes of API tokens and `IP_HASH_SALT` keys the stored hashes of client addresses. When one of them is
+missing, shorter than 32 characters or obviously not random, the app answers every request with an
+error and the server log names the key and says why. The same goes for a value that was ever written
+out in this repository (an old example value, a development key, a secret from its tests) and for
+anything close to one: such a value with characters added, changed or left out, in quotes, with other
+separators or written backwards, and such a value run through base64, hex, base32 or a hash command.
+
+Changing the session secret signs everyone out once. Changing the token pepper makes every API token
+invalid, so their owners have to create new ones. Changing the salt starts the daily download counts
+and the rate limits over.
+
 The workflow needs the `production` environment secret `DEPLOY_SSH_KEY` and the repository variables
 `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_UMAMI_WEBSITE_ID` and `NEXT_PUBLIC_UMAMI_SCRIPT_URL`, which are
 built into the page.
