@@ -109,14 +109,25 @@ function tidy(raw: string): string {
   return value;
 }
 
-/** True when the text is one block repeated, also when the last copy is cut short. */
-function repeatsBlock(text: string): boolean {
-  for (let period = 1; period <= text.length / 2; period++) {
-    let i = period;
-    while (i < text.length && text[i] === text[i - period]) i++;
-    if (i === text.length) return true;
+/**
+ * True when the text is one block of at most half its length repeated, also
+ * when the last copy is cut short. One pass: each character is read a bounded
+ * number of times, however long the text is.
+ */
+export function repeatsBlock(text: ArrayLike<string>): boolean {
+  const length = text.length;
+  // border[i]: how long the longest stretch is that both starts and ends the
+  // first i characters without being all of them.
+  const border = new Uint32Array(length + 1);
+  let k = 0;
+  for (let i = 1; i < length; i++) {
+    const c = text[i];
+    while (k > 0 && c !== text[k]) k = border[k];
+    if (c === text[k]) k++;
+    border[i + 1] = k;
   }
-  return false;
+  // The shortest block the text repeats has length - border[length] characters.
+  return length >= 2 && length - border[length] <= length / 2;
 }
 
 /**
