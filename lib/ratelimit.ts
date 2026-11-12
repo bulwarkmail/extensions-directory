@@ -34,6 +34,8 @@ export const LIMITS = {
   writesPerIp: (ipHash: string): Limit => ({ key: `write-ip:${ipHash}`, max: 60, windowSec: 60 }),
   reportsPerIp: (ipHash: string): Limit => ({ key: `report-ip:${ipHash}`, max: 5, windowSec: 86400 }),
   pollPerSubmission: (id: string): Limit => ({ key: `poll:${id}`, max: 120, windowSec: 3600 }),
+  // Requests to /submissions/{id} without a valid credential for that submission, per caller address.
+  unauthorizedPollPerIp: (ipHash: string): Limit => ({ key: `poll-ip:${ipHash}`, max: 120, windowSec: 3600 }),
 };
 
 export const MAX_QUEUED = 50;

@@ -20,7 +20,7 @@ You can then submit a version from the extension's page in the dashboard. The re
 
 With trusted publishing, GitHub gives your workflow a short-lived token that says which repository, workflow file and environment it is running in. The directory checks that token against the publisher you registered. There is no secret to store, rotate or leak.
 
-1. On the extension's page in the dashboard, under "Publish from CI", add a trusted publisher: the repository, the workflow file (for example `.github/workflows/publish.yml`), and optionally a GitHub environment. By default only tags may publish.
+1. On the extension's page in the dashboard, under "Publish from CI", add a trusted publisher: the repository, the workflow file (for example `.github/workflows/publish.yml`), and optionally a GitHub environment. By default only tags may publish. The repository must belong to your GitHub account or to an organization you are a member of in the directory; for any other repository, ask the directory's staff to add the publisher.
 2. Add the workflow to the repository:
 
 ```yaml

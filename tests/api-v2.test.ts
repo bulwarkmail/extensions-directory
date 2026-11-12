@@ -104,12 +104,13 @@ describe("members and publishers", () => {
   });
 
   it("stores trusted publishers by the repository's numeric ids", async () => {
-    addRepo("alice/plugins", { info: { id: "111", ownerId: "222" } as never, commits: {} });
+    // alice/plugins belongs to alice's own GitHub account (id 1001).
+    addRepo("alice/plugins", { info: { id: "111", ownerId: "1001" } as never, commits: {} });
     await signIn("author-alice");
     expect((await call("POST", "/extensions/jitsi-meet/publishers", { repository: "alice/plugins", workflowPath: "publish.yml" })).status).toBe(400);
     const r = await call("POST", "/extensions/jitsi-meet/publishers", { repository: "alice/plugins", workflowPath: ".github/workflows/publish.yml", environment: "release", subpath: "jitsi-meet" });
     expect(r.status).toBe(201);
-    expect(r.body.data).toMatchObject({ repositoryId: "111", repositoryOwnerId: "222", subpath: "jitsi-meet", allowedRefs: "tags" });
+    expect(r.body.data).toMatchObject({ repositoryId: "111", repositoryOwnerId: "1001", subpath: "jitsi-meet", allowedRefs: "tags" });
   });
 });
 

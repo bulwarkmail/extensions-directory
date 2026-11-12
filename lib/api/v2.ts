@@ -400,8 +400,11 @@ const authorRoutes: Route[] = [
       const body = await readJson(ctx.request);
       const subpath = cleanSubpath(str(body.subpath, "subpath", { optional: true, max: 200 }) ?? ext.subpath);
       if (subpath === null) throw new HttpError(400, "subpath must be a folder inside the repository", "bad_request");
+      // owner/name or its github.com URL; nothing else reaches GitHub.
+      const repo = parseRepoUrl(str(body.repository, "repository", { max: 200 })!);
+      if (!repo || repo.host !== "github.com" || !isValidRepo("github.com", repo.repo)) throw new HttpError(400, "repository must be owner/name on github.com, or its URL", "bad_request");
       const row = await addPublisher(ext, {
-        repository: str(body.repository, "repository", { max: 200 })!.replace(/^https:\/\/github\.com\//, ""),
+        repository: repo.repo,
         workflowPath: str(body.workflowPath, "workflowPath", { max: 200 })!,
         environment: str(body.environment, "environment", { optional: true, max: 100 }) ?? null,
         subpath,

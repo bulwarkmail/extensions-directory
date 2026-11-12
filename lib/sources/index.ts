@@ -34,6 +34,21 @@ const SHA_RE = /^[0-9a-f]{40}$/;
 const enc = (s: string) => encodeURIComponent(s);
 const encPath = (p: string) => p.split("/").map(enc).join("/");
 
+// Only a repository name, a full commit SHA and a path inside the repository
+// go into a URL, so a caller can't point a request at another API path.
+function repoName(host: SourceHost, repo: string): string {
+  if (!isValidRepo(host, repo)) throw new SourceError(`Not a repository name: ${repo}`);
+  return repo;
+}
+function commitSha(sha: string): string {
+  if (!SHA_RE.test(sha)) throw new SourceError(`Not a commit SHA: ${sha}`);
+  return sha;
+}
+function repoPath(path: string): string {
+  if (path.split("/").some((s) => s === "" || s === "." || s === "..")) throw new SourceError(`Not a path inside the repository: ${path}`);
+  return path;
+}
+
 function githubHeaders(): Record<string, string> {
   const token = process.env.GITHUB_TOKEN;
   if (token) return { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" };
@@ -47,27 +62,27 @@ const github: Source = {
   host: "github.com",
   async repoInfo(repo) {
     const r = await getJson<{ id: number; full_name: string; private: boolean; visibility?: string; default_branch: string; owner: { id: number } }>(
-      `https://api.github.com/repos/${repo}`, { headers: githubHeaders() });
+      `https://api.github.com/repos/${repoName("github.com", repo)}`, { headers: githubHeaders() });
     if (!r) return null;
     return { fullName: r.full_name, id: String(r.id), ownerId: String(r.owner.id), isPublic: r.private === false, defaultBranch: r.default_branch };
   },
   async resolveRef(repo, ref) {
-    const r = await getJson<{ sha?: string }>(`https://api.github.com/repos/${repo}/commits/${enc(ref)}`, { headers: githubHeaders() }).catch((e) => {
+    const r = await getJson<{ sha?: string }>(`https://api.github.com/repos/${repoName("github.com", repo)}/commits/${enc(ref)}`, { headers: githubHeaders() }).catch((e) => {
       if (e instanceof SourceError && e.status === 422) return null;
       throw e;
     });
     return r?.sha && SHA_RE.test(r.sha) ? r.sha : null;
   },
   async archive(repo, sha) {
-    const b = await get(`https://api.github.com/repos/${repo}/zipball/${sha}`, { headers: githubHeaders(), maxBytes: MAX_ARCHIVE_BYTES, timeoutMs: 120_000 });
+    const b = await get(`https://api.github.com/repos/${repoName("github.com", repo)}/zipball/${commitSha(sha)}`, { headers: githubHeaders(), maxBytes: MAX_ARCHIVE_BYTES, timeoutMs: 120_000 });
     if (!b) throw new SourceError(`No archive for ${repo}@${sha}`);
     return b;
   },
-  file(repo, sha, path, maxBytes) {
-    return get(`https://raw.githubusercontent.com/${repo}/${sha}/${encPath(path)}`, { maxBytes });
+  async file(repo, sha, path, maxBytes) {
+    return get(`https://raw.githubusercontent.com/${repoName("github.com", repo)}/${commitSha(sha)}/${encPath(repoPath(path))}`, { maxBytes });
   },
   async releaseNotes(repo, tag) {
-    const r = await getJson<{ body?: string | null }>(`https://api.github.com/repos/${repo}/releases/tags/${enc(tag)}`, { headers: githubHeaders() });
+    const r = await getJson<{ body?: string | null }>(`https://api.github.com/repos/${repoName("github.com", repo)}/releases/tags/${enc(tag)}`, { headers: githubHeaders() });
     return r?.body?.trim() || null;
   },
   repoUrl: (repo) => `https://github.com/${repo}`,
@@ -78,24 +93,24 @@ const gitlab: Source = {
   host: "gitlab.com",
   async repoInfo(repo) {
     const r = await getJson<{ id: number; path_with_namespace: string; visibility: string; default_branch: string; namespace: { id: number } }>(
-      `https://gitlab.com/api/v4/projects/${enc(repo)}`);
+      `https://gitlab.com/api/v4/projects/${enc(repoName("gitlab.com", repo))}`);
     if (!r) return null;
     return { fullName: r.path_with_namespace, id: String(r.id), ownerId: String(r.namespace.id), isPublic: r.visibility === "public", defaultBranch: r.default_branch };
   },
   async resolveRef(repo, ref) {
-    const r = await getJson<{ id?: string }>(`https://gitlab.com/api/v4/projects/${enc(repo)}/repository/commits/${enc(ref)}`);
+    const r = await getJson<{ id?: string }>(`https://gitlab.com/api/v4/projects/${enc(repoName("gitlab.com", repo))}/repository/commits/${enc(ref)}`);
     return r?.id && SHA_RE.test(r.id) ? r.id : null;
   },
   async archive(repo, sha) {
-    const b = await get(`https://gitlab.com/api/v4/projects/${enc(repo)}/repository/archive.zip?sha=${sha}`, { maxBytes: MAX_ARCHIVE_BYTES, timeoutMs: 120_000 });
+    const b = await get(`https://gitlab.com/api/v4/projects/${enc(repoName("gitlab.com", repo))}/repository/archive.zip?sha=${commitSha(sha)}`, { maxBytes: MAX_ARCHIVE_BYTES, timeoutMs: 120_000 });
     if (!b) throw new SourceError(`No archive for ${repo}@${sha}`);
     return b;
   },
-  file(repo, sha, path, maxBytes) {
-    return get(`https://gitlab.com/api/v4/projects/${enc(repo)}/repository/files/${enc(path)}/raw?ref=${sha}`, { maxBytes });
+  async file(repo, sha, path, maxBytes) {
+    return get(`https://gitlab.com/api/v4/projects/${enc(repoName("gitlab.com", repo))}/repository/files/${enc(repoPath(path))}/raw?ref=${commitSha(sha)}`, { maxBytes });
   },
   async releaseNotes(repo, tag) {
-    const r = await getJson<{ description?: string | null }>(`https://gitlab.com/api/v4/projects/${enc(repo)}/releases/${enc(tag)}`);
+    const r = await getJson<{ description?: string | null }>(`https://gitlab.com/api/v4/projects/${enc(repoName("gitlab.com", repo))}/releases/${enc(tag)}`);
     return r?.description?.trim() || null;
   },
   repoUrl: (repo) => `https://gitlab.com/${repo}`,
@@ -106,12 +121,12 @@ const codeberg: Source = {
   host: "codeberg.org",
   async repoInfo(repo) {
     const r = await getJson<{ id: number; full_name: string; private: boolean; default_branch: string; owner: { id: number } }>(
-      `https://codeberg.org/api/v1/repos/${repo}`);
+      `https://codeberg.org/api/v1/repos/${repoName("codeberg.org", repo)}`);
     if (!r) return null;
     return { fullName: r.full_name, id: String(r.id), ownerId: String(r.owner.id), isPublic: r.private === false, defaultBranch: r.default_branch };
   },
   async resolveRef(repo, ref) {
-    const r = await getJson<{ sha?: string }[]>(`https://codeberg.org/api/v1/repos/${repo}/commits?sha=${enc(ref)}&limit=1&stat=false&verification=false&files=false`);
+    const r = await getJson<{ sha?: string }[]>(`https://codeberg.org/api/v1/repos/${repoName("codeberg.org", repo)}/commits?sha=${enc(ref)}&limit=1&stat=false&verification=false&files=false`);
     const sha = r?.[0]?.sha;
     // A SHA prefix also matches; insist on the full commit the caller gave.
     if (!sha || !SHA_RE.test(sha)) return null;
@@ -119,15 +134,15 @@ const codeberg: Source = {
     return sha;
   },
   async archive(repo, sha) {
-    const b = await get(`https://codeberg.org/api/v1/repos/${repo}/archive/${sha}.zip`, { maxBytes: MAX_ARCHIVE_BYTES, timeoutMs: 120_000 });
+    const b = await get(`https://codeberg.org/api/v1/repos/${repoName("codeberg.org", repo)}/archive/${commitSha(sha)}.zip`, { maxBytes: MAX_ARCHIVE_BYTES, timeoutMs: 120_000 });
     if (!b) throw new SourceError(`No archive for ${repo}@${sha}`);
     return b;
   },
-  file(repo, sha, path, maxBytes) {
-    return get(`https://codeberg.org/api/v1/repos/${repo}/raw/${encPath(path)}?ref=${sha}`, { maxBytes });
+  async file(repo, sha, path, maxBytes) {
+    return get(`https://codeberg.org/api/v1/repos/${repoName("codeberg.org", repo)}/raw/${encPath(repoPath(path))}?ref=${commitSha(sha)}`, { maxBytes });
   },
   async releaseNotes(repo, tag) {
-    const r = await getJson<{ body?: string | null }>(`https://codeberg.org/api/v1/repos/${repo}/releases/tags/${enc(tag)}`);
+    const r = await getJson<{ body?: string | null }>(`https://codeberg.org/api/v1/repos/${repoName("codeberg.org", repo)}/releases/tags/${enc(tag)}`);
     return r?.body?.trim() || null;
   },
   repoUrl: (repo) => `https://codeberg.org/${repo}`,

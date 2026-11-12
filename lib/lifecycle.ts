@@ -5,10 +5,10 @@ import crypto from "crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "./db/client";
 import {
-  apiTokens, authors, extensionMembers, extensions, extensionVersions, publishers, ROLES, submissions,
+  apiTokens, authors, extensionMembers, extensions, extensionVersions, orgMembers, publishers, ROLES, submissions,
   textChanges, TEXT_FIELDS, type Role, type TextField,
 } from "./db/schema";
-import { HttpError } from "./auth/session";
+import { hasRole, HttpError } from "./auth/session";
 import { audit, type Actor } from "./audit";
 import { queueNotification } from "./notify";
 import { refreshLatest } from "./release-caches";
@@ -218,12 +218,30 @@ export function membersOf(extensionId: string) {
 const WORKFLOW_RE = /^\.github\/workflows\/[A-Za-z0-9._-]+\.ya?ml$/;
 const ENV_RE = /^[A-Za-z0-9._ -]{1,100}$/;
 
+/**
+ * Whether the account may name a repository with this GitHub owner id in a
+ * trusted publisher: its own GitHub account, an organization author it is a
+ * member of, or any repository for an admin.
+ */
+function mayPublishFrom(authorId: string | null | undefined, ownerId: string): boolean {
+  if (!authorId) return false;
+  const a = db.select({ githubId: authors.githubId, role: authors.role }).from(authors).where(eq(authors.id, authorId)).get();
+  if (!a) return false;
+  if (hasRole(a.role, "admin") || String(a.githubId) === ownerId) return true;
+  return db.select({ githubId: authors.githubId }).from(orgMembers).innerJoin(authors, eq(authors.id, orgMembers.orgId))
+    .where(and(eq(orgMembers.authorId, authorId), eq(authors.kind, "org"))).all()
+    .some((o) => String(o.githubId) === ownerId);
+}
+
 export async function addPublisher(ext: Ext, p: { repository: string; workflowPath: string; environment: string | null; subpath: string; allowedRefs: "tags" | "any" }, actor: Actor, request?: Request) {
   if (!WORKFLOW_RE.test(p.workflowPath)) throw new HttpError(400, "The workflow must be a file in .github/workflows/", "bad_request");
   if (p.environment && !ENV_RE.test(p.environment)) throw new HttpError(400, "Not a valid environment name", "bad_request");
   const info = await source("github.com").repoInfo(p.repository).catch(() => null);
   if (!info) throw new HttpError(400, `Repository ${p.repository} does not exist on GitHub`, "repo_not_found");
   if (!info.isPublic) throw new HttpError(400, `Repository ${p.repository} is not public`, "repo_private");
+  if (!mayPublishFrom(actor.id, info.ownerId)) {
+    throw new HttpError(403, `${info.fullName} is not owned by your GitHub account or by an organization you are a member of here. Ask the directory's staff to add this trusted publisher.`, "repo_not_owned");
+  }
   const [row] = await db.insert(publishers).values({
     id: crypto.randomUUID(), extensionId: ext.id, repository: info.fullName, repositoryId: info.id, repositoryOwnerId: info.ownerId,
     workflowPath: p.workflowPath, environment: p.environment, subpath: p.subpath, allowedRefs: p.allowedRefs, createdBy: actor.id!,
