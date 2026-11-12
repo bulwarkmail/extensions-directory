@@ -28,6 +28,8 @@ export interface CredentialGrant {
   setBy: "manifest" | "admin" | "user";
   /** The fixed origin, or for a server the admin sets, the default the manifest brings for it. */
   origin: string | null;
+  /** Which stored value goes to which server, worded as the webmail words it (see credentialBinding). */
+  binding: string;
 }
 
 export interface Grant {
@@ -49,6 +51,11 @@ export interface Grant {
    * brings for that setting.
    */
   credentialOrigins: string[];
+  /** One line per credential, `<id>: <binding>`: a line an update doesn't have yet is a new grant. */
+  credentialBindings: string[];
+  /** The settings declared `secret`, and those declared with any other kind. */
+  secretSettings: string[];
+  plainSettings: string[];
   /**
    * False when the webmail check refuses the manifest. The lists then hold
    * every name the manifest asks for, so nothing is left out.
@@ -72,6 +79,33 @@ function urlOrigin(value: unknown): string | null {
   }
 }
 
+/**
+ * Which stored value a credential sends to which server: the scope, the
+ * setting holding the secret, the one holding the user name when it is sent
+ * (basic auth), and the server, fixed or read from a setting; the label and
+ * the header name move nothing and are left out. Mirrors credentialBindings in
+ * the webmail's lib/admin/extension-grants.ts word for word, so the directory
+ * sees a change exactly where the webmail asks the admin about one.
+ */
+function credentialBinding(spec: { scope?: unknown; secretKey?: unknown; usernameKey?: unknown; origin?: unknown; originKey?: unknown; inject?: unknown }): string {
+  if (spec.scope === "user") return `the user's own account, sent to ${urlOrigin(spec.origin) ?? "the server the user enters"}`;
+  const inject = spec.inject && typeof spec.inject === "object" ? (spec.inject as { type?: unknown }).type : undefined;
+  const what = inject === "none"
+    ? "no secret"
+    : `the secret in setting "${String(spec.secretKey)}"`
+      + (inject === "basic" && typeof spec.usernameKey === "string" ? ` with the user name in setting "${spec.usernameKey}"` : "");
+  const where = urlOrigin(spec.origin) ?? (typeof spec.originKey === "string" ? `the server in setting "${spec.originKey}"` : "no server");
+  return `${what}, sent to ${where}`;
+}
+
+/** The configSchema keys declared `secret`, or not: settingsDeclared in the same webmail file. */
+function settingsDeclared(configSchema: unknown, secret: boolean): string[] {
+  if (!configSchema || typeof configSchema !== "object" || Array.isArray(configSchema)) return [];
+  return Object.entries(configSchema as Record<string, unknown>)
+    .filter(([, field]) => !!field && typeof field === "object" && ((field as { type?: unknown }).type === "secret") === secret)
+    .map(([key]) => key);
+}
+
 function credentialGrants(credentials: unknown, configSchema: unknown): CredentialGrant[] {
   if (!credentials || typeof credentials !== "object" || Array.isArray(credentials)) return [];
   const schema = (configSchema && typeof configSchema === "object" ? configSchema : {}) as Record<string, { default?: unknown } | undefined>;
@@ -81,12 +115,13 @@ function credentialGrants(credentials: unknown, configSchema: unknown): Credenti
     const s = spec as { label?: unknown; scope?: unknown; origin?: unknown; originKey?: unknown };
     const label = typeof s.label === "string" && s.label.trim() ? s.label : id;
     const scope = s.scope === "admin" ? "admin" : "user";
+    const binding = credentialBinding(s);
     const fixed = urlOrigin(s.origin);
-    if (fixed) out.push({ id, label, scope, setBy: "manifest", origin: fixed });
+    if (fixed) out.push({ id, label, scope, setBy: "manifest", origin: fixed, binding });
     else if (scope === "admin") {
       const key = typeof s.originKey === "string" && Object.hasOwn(schema, s.originKey) ? s.originKey : null;
-      out.push({ id, label, scope, setBy: "admin", origin: key ? urlOrigin(schema[key]?.default) : null });
-    } else out.push({ id, label, scope, setBy: "user", origin: null });
+      out.push({ id, label, scope, setBy: "admin", origin: key ? urlOrigin(schema[key]?.default) : null, binding });
+    } else out.push({ id, label, scope, setBy: "user", origin: null, binding });
   }
   return out;
 }
@@ -94,9 +129,21 @@ function credentialGrants(credentials: unknown, configSchema: unknown): Credenti
 const originsOf = (credentials: CredentialGrant[]) =>
   [...new Set(credentials.map((c) => c.origin).filter((o): o is string => !!o))];
 
+/** The credential and settings parts of a grant. */
+function storedValues(credentials: CredentialGrant[], configSchema: unknown) {
+  return {
+    credentials,
+    credentialOrigins: originsOf(credentials),
+    credentialBindings: [...new Set(credentials.map((c) => `${c.id}: ${c.binding}`))],
+    secretSettings: settingsDeclared(configSchema, true),
+    plainSettings: settingsDeclared(configSchema, false),
+  };
+}
+
 const THEME: Grant = {
   permissions: [], optionalPermissions: [], unknownOptionalPermissions: [], tier: null,
-  httpOrigins: [], apiPostPaths: [], frameOrigins: [], credentials: [], credentialOrigins: [], checked: true,
+  httpOrigins: [], apiPostPaths: [], frameOrigins: [], credentials: [], credentialOrigins: [],
+  credentialBindings: [], secretSettings: [], plainSettings: [], checked: true,
 };
 
 /** What a webmail grants the extension with this manifest.json. */
@@ -113,7 +160,6 @@ export function grantOf(manifest: unknown): Grant {
       credentials?: unknown; configSchema?: unknown;
     };
     const permissions = [...v.permissions];
-    const credentials = credentialGrants(v.credentials, v.configSchema);
     return {
       permissions,
       optionalPermissions: permissions.filter((p) => optional.includes(p) && !asked.includes(p)),
@@ -122,12 +168,10 @@ export function grantOf(manifest: unknown): Grant {
       httpOrigins: [...(v.httpOrigins ?? [])],
       apiPostPaths: [...(v.apiPostPaths ?? [])],
       frameOrigins: [...(v.frameOrigins ?? [])],
-      credentials,
-      credentialOrigins: originsOf(credentials),
+      ...storedValues(credentialGrants(v.credentials, v.configSchema), v.configSchema),
       checked: true,
     };
   }
-  const credentials = credentialGrants(m.credentials, m.configSchema);
   return {
     permissions: [...new Set([...asked, ...optional])],
     optionalPermissions: optional.filter((p) => !asked.includes(p)),
@@ -136,8 +180,7 @@ export function grantOf(manifest: unknown): Grant {
     httpOrigins: strings(m.httpOrigins),
     apiPostPaths: strings(m.apiPostPaths),
     frameOrigins: strings(m.frameOrigins),
-    credentials,
-    credentialOrigins: originsOf(credentials),
+    ...storedValues(credentialGrants(m.credentials, m.configSchema), m.configSchema),
     checked: false,
   };
 }

@@ -28,6 +28,9 @@ interface Diff {
   optionalPermissionsAdded?: string[];
   keystoreAdded?: boolean;
   originsAdded: Record<string, string[]>;
+  // Missing in diffs stored before credential bindings were counted.
+  credentialsChanged?: { credential: string; before: string | null; after: string }[];
+  formerSecrets?: string[];
   tierChanged: { from: string | null; to: string | null } | null;
 }
 
@@ -116,6 +119,16 @@ export function SubmissionDetails({ s }: { s: Submission }) {
           {diff.permissionsAdded.length ? <p className="bw-note bw-note-warning">New permissions: {diff.permissionsAdded.join(", ")}</p> : null}
           {diff.optionalPermissionsAdded?.length ? <p className="bw-note bw-note-warning">New optional permissions, granted like the others: {diff.optionalPermissionsAdded.join(", ")}</p> : null}
           {Object.entries(diff.originsAdded).map(([k, v]) => <p key={k} className="bw-note bw-note-warning">{ORIGIN_LINES[k] ?? `New ${k}`}: {v.join(", ")}</p>)}
+          {diff.credentialsChanged?.map((c) => (
+            <p key={`cred-${c.credential}`} className="bw-note bw-note-warning">
+              {c.before ? `Credential "${c.credential}": now ${c.after}; before, ${c.before}.` : `New credential "${c.credential}": ${c.after}.`}
+            </p>
+          ))}
+          {diff.formerSecrets?.length ? (
+            <p className="bw-note bw-note-warning">
+              {`Settings no longer secret: ${diff.formerSecrets.map((k) => `"${k}"`).join(", ")}. What is entered there from now on can be read by every signed-in user and by the plugin itself.`}
+            </p>
+          ) : null}
           {diff.permissionsRemoved.length ? <p>Permissions no longer requested: {diff.permissionsRemoved.join(", ")}</p> : null}
           <p>{diff.added.length} added, {diff.changed.length} changed, {diff.removed.length} removed, {diff.unchanged} unchanged files.</p>
         </section>

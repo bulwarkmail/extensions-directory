@@ -1,7 +1,8 @@
 // What changed against the previous published version, for the reviewer:
 // files added, removed and changed, and what a webmail newly grants
 // (lib/webmail-compat/grants.ts): permissions with the optional ones, the
-// three origin lists, the servers credentials are sent to, and the tier. A
+// three origin lists, the servers credentials are sent to and which stored
+// secret goes to each, settings that stop being secrets, and the tier. A
 // first version is compared with nothing, so all it is granted is new.
 import crypto from "crypto";
 import JSZip from "jszip";
@@ -22,6 +23,15 @@ export interface DiffSummary {
   keystoreAdded: boolean;
   /** New entries of httpOrigins, frameOrigins and apiPostPaths, and new servers credentials go to ("credentials"). */
   originsAdded: Record<string, string[]>;
+  /**
+   * Credentials whose binding (which stored value goes to which server) is new,
+   * with the credential's binding before, if it had one. Counted as the webmail
+   * counts them (grantsAdded in lib/admin/extension-grants.ts): a line the
+   * previous version doesn't have.
+   */
+  credentialsChanged: { credential: string; before: string | null; after: string }[];
+  /** Settings the previous version declares `secret` and this one with another kind. */
+  formerSecrets: string[];
   /** A changed tier; on a first version, { from: null, to: "privileged" } for a privileged plugin. */
   tierChanged: { from: string | null; to: string | null } | null;
 }
@@ -66,6 +76,12 @@ export function diffBundles(
   const oldTargets = new Set((before?.credentials ?? []).map(credentialTarget));
   const freshTargets = [...new Set(after.credentials.map(credentialTarget))].filter((t) => !oldTargets.has(t));
   if (freshTargets.length) originsAdded.credentials = freshTargets;
+  const oldLines = new Set(before?.credentialBindings ?? []);
+  const oldBinding = new Map((before?.credentials ?? []).map((c) => [c.id, c.binding]));
+  const credentialsChanged = after.credentials
+    .filter((c) => !oldLines.has(`${c.id}: ${c.binding}`))
+    .map((c) => ({ credential: c.id, before: oldBinding.get(c.id) ?? null, after: c.binding }));
+  const formerSecrets = after.plainSettings.filter((key) => (before?.secretSettings ?? []).includes(key));
   const tierChanged = before
     ? before.tier !== after.tier ? { from: before.tier, to: after.tier } : null
     : after.tier === "privileged" ? { from: null, to: "privileged" } : null;
@@ -80,6 +96,8 @@ export function diffBundles(
     optionalPermissionsAdded: after.optionalPermissions.filter((p) => !prevPerms.has(p)).sort(),
     keystoreAdded: nextPerms.has("keystore") && !prevPerms.has("keystore"),
     originsAdded,
+    credentialsChanged,
+    formerSecrets,
     tierChanged,
   };
 }

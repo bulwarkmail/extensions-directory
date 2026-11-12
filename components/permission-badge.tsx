@@ -1,6 +1,6 @@
 import { Eye, Globe, KeyRound, LayoutPanelTop, ShieldAlert, TriangleAlert, type LucideIcon } from "lucide-react";
 import { ICON } from "@/components/icon";
-import { credentialTarget, HIGH_RISK_PERMISSIONS, IMPLICIT, permissionText, type Grant } from "@/lib/webmail-compat";
+import { HIGH_RISK_PERMISSIONS, IMPLICIT, permissionText, type Grant } from "@/lib/webmail-compat";
 
 type Group = "act" | "read" | "ui";
 
@@ -110,7 +110,7 @@ export function GrantList({ grant, isTheme = false }: { grant: Grant; isTheme?: 
           <ul>
             {grant.credentials.map((c) => (
               <li key={c.id}>
-                <span>{c.label}: {credentialTarget(c)}</span>
+                <span>{c.label}: {c.binding}{c.setBy === "admin" && c.origin ? ` (default ${c.origin})` : ""}</span>
                 <code className="bw-icode">{c.scope === "admin" ? "admin's secret" : "each user's account"}</code>
               </li>
             ))}
