@@ -13,14 +13,14 @@ import { ok, readJson, str } from "@/lib/http";
 import { advisoriesFor, extensionBySlug, latestFor, listExtensions, mediaOf, newest, ratingSummary, releasesOf, type Channel } from "@/lib/catalog";
 import { advisoryView, createAdvisory, handleReport, hideRating, rate, ratingsOf, removeRating, report, updateAdvisory } from "@/lib/community";
 import {
-  addMember, addPublisher, banAuthor, decideTextChange, deprecate, extensionOr404, membersOf, proposeTextChange, removeMember,
+  addMember, addPublisher, banAuthor, deprecate, extensionOr404, membersOf, proposeTextChange, removeMember,
   removePublisher, setArchived, setFeatured, setMaxAppVersion, setRole, setSource, setVerified, suspend, transferExtension, unbanAuthor,
   undeprecate, unsuspend, unyankVersion, yankVersion,
 } from "@/lib/lifecycle";
 import { addOrgMember, assertOrgManager, extensionsManagedBy, orgMembersOf, orgOr404, orgRole, orgsOf, removeOrgMember, reservationOwner } from "@/lib/orgs";
 import { createSubmission, reserveExtension } from "@/lib/publishing/submit";
 import { submissionView } from "@/lib/publishing/view";
-import { approveSubmission, rebuildSubmission, rejectSubmission, withdrawSubmission } from "@/lib/review";
+import { approveSubmission, decideTextChangeAsReviewer, rebuildSubmission, rejectSubmission, withdrawSubmission } from "@/lib/review";
 import { bundleResponse, servable } from "@/lib/bundle-response";
 import { downloadsByDay } from "@/lib/downloads";
 import { changelogsBetween, extensionSummary, fileUrl, versionBrief, versionFull, authorView } from "@/lib/api/views";
@@ -662,7 +662,8 @@ const adminRoutes: Route[] = [
     handler: async (ctx) => {
       const body = await readJson(ctx.request, 64 * 1024);
       const notes = str(body.notes, "notes", { optional: true, max: 10_000 }) ?? null;
-      if (action === "approve") await approveSubmission(ctx.params.id, ctx.user.id, notes, ctx.request);
+      // selfReview: a super admin approving their own work says so (lib/review.ts).
+      if (action === "approve") await approveSubmission(ctx.params.id, ctx.user.id, notes, ctx.request, { selfReview: body.selfReview === true });
       else if (action === "reject") await rejectSubmission(ctx.params.id, ctx.user.id, notes ?? "", ctx.request);
       else await rebuildSubmission(ctx.params.id, actorOf(ctx, true), ctx.request);
       return ok(submissionView(db.select().from(submissions).where(eq(submissions.id, ctx.params.id)).get()!));
@@ -679,7 +680,7 @@ const adminRoutes: Route[] = [
     method: "POST", path: `/admin/text-changes/:id/${action}`, auth: "reviewer",
     handler: async (ctx) => {
       const body = await readJson(ctx.request);
-      await decideTextChange(ctx.params.id, action === "approve", ctx.user.id, str(body.notes, "notes", { optional: true, max: 5000 }) ?? null, ctx.request);
+      await decideTextChangeAsReviewer(ctx.params.id, action === "approve", ctx.user.id, str(body.notes, "notes", { optional: true, max: 5000 }) ?? null, ctx.request, { selfReview: body.selfReview === true });
       return ok({ decided: action });
     },
   })),
