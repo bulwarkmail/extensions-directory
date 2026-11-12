@@ -97,7 +97,7 @@ describe("polling a submission", () => {
     const { token } = await createToken({ authorId: "alice2", name: "ci", extensionIds: [other.extensionId!], scopes: ["read"], days: 1 }, { kind: "author", id: "alice2" });
     const statuses: number[] = [];
     for (let i = 0; i < 121; i++) statuses.push((await poll(s.id, STRANGER, token)).status);
-    expect(statuses[0]).toBe(403);
+    expect(statuses[0]).toBe(404);
     expect(statuses.at(-1)).toBe(429);
     expect((await poll(s.id, OWNER, pollToken)).status).toBe(200);
     // For its own extension the token still reads.

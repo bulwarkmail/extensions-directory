@@ -18,25 +18,31 @@ type Params = { params: Promise<{ id: string }> };
 /**
  * Who may see a submission: the poll token from the publish response, an
  * API token scoped to its extension, or a signed-in maintainer or reviewer.
+ * What doesn't depend on the submission (the API token itself, a session's
+ * origin on writes) is checked before it is looked up, and a caller who may
+ * not see it gets the answer an unknown id gets.
  */
 async function authorize(request: Request, id: string, write: boolean) {
-  const sub = db.select().from(submissions).where(eq(submissions.id, id)).get();
   const notFound = new HttpError(404, "Submission not found", "not_found");
-  if (!sub) throw notFound;
   const credential = bearer(request);
-  if (credential?.startsWith("bwp_")) {
+  const pollToken = credential?.startsWith("bwp_") ? credential : null;
+  const auth = credential && looksLikeToken(credential) ? await authenticateToken(credential, hashIp(clientIp(request))) : null;
+  const user = pollToken || auth ? null : await currentUser();
+  if (user && write) assertSameOrigin(request);
+  const sub = db.select().from(submissions).where(eq(submissions.id, id)).get();
+  if (!sub) throw notFound;
+  if (pollToken) {
     const okToken = !write && sub.pollTokenHash && sub.pollTokenExpiresAt && sub.pollTokenExpiresAt.getTime() > Date.now() &&
-      crypto.timingSafeEqual(Buffer.from(sub.pollTokenHash, "hex"), Buffer.from(hashPollToken(credential), "hex"));
+      crypto.timingSafeEqual(Buffer.from(sub.pollTokenHash, "hex"), Buffer.from(hashPollToken(pollToken), "hex"));
     if (!okToken) throw notFound;
     return { sub, actor: { kind: "anonymous" as const, id: null }, full: true };
   }
-  if (credential && looksLikeToken(credential)) {
-    const auth = await authenticateToken(credential, hashIp(clientIp(request)));
-    await assertTokenAllows(auth, write ? "publish" : auth.token.scopes.includes("read") ? "read" : auth.token.scopes[0], sub.extensionId ?? "");
+  if (auth) {
+    const extensionId = sub.extensionId ?? "";
+    if (!auth.extensionIds.includes(extensionId) || !(await memberRole(auth.token.authorId, extensionId))) throw notFound;
+    await assertTokenAllows(auth, write ? "publish" : auth.token.scopes.includes("read") ? "read" : auth.token.scopes[0], extensionId);
     return { sub, actor: { kind: "token" as const, id: auth.token.id }, full: true };
   }
-  const user = await currentUser();
-  if (user && write) assertSameOrigin(request);
   if (user && (hasRole(user.role, "reviewer") || (sub.extensionId && (await memberRole(user.id, sub.extensionId))))) {
     return { sub, actor: { kind: hasRole(user.role, "reviewer") ? ("admin" as const) : ("author" as const), id: user.id }, full: true };
   }
