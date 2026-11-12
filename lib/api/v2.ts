@@ -33,6 +33,7 @@ import { getStoredFile } from "@/lib/storage";
 import { validWebhookUrl, WEBHOOK_EVENTS } from "@/lib/webhooks";
 import { hit, LIMITS } from "@/lib/ratelimit";
 import { KNOWN_PERMISSIONS, permissionText, HIGH_RISK_PERMISSIONS, grantOf } from "@/lib/webmail-compat";
+import { REVIEW_PART_CHARS } from "@/lib/scanner";
 import type { Ctx, Route } from "./router";
 import crypto from "crypto";
 
@@ -616,9 +617,14 @@ const adminRoutes: Route[] = [
     },
   },
   {
-    // One file of the staged bundle and the same file in the previous version, for the diff view.
+    // One file of the staged bundle and the same file in the previous version, for the diff view,
+    // in parts: `text` and `previous` from `?offset=` (0 when left out), at most REVIEW_PART_CHARS
+    // characters each, with the total lengths and `nextOffset` (null once both are complete).
     method: "GET", path: "/admin/submissions/:id/file", auth: "reviewer",
     handler: async ({ params, query }) => {
+      const rawOffset = query.get("offset");
+      if (rawOffset !== null && !/^\d{1,15}$/.test(rawOffset)) throw new HttpError(400, "offset must be a whole number of characters, 0 or more", "bad_request");
+      const offset = rawOffset === null ? 0 : Number(rawOffset);
       const s = db.select().from(submissions).where(eq(submissions.id, params.id)).get();
       if (!s?.artifactPath) throw new HttpError(404, "No build", "not_found");
       const name = query.get("path") ?? "";
@@ -631,9 +637,24 @@ const adminRoutes: Route[] = [
         const v = db.select().from(extensionVersions).where(and(eq(extensionVersions.extensionId, s.extensionId), eq(extensionVersions.version, prevVersion))).get();
         const zip = v ? await getStoredFile(v.bundlePath) : null;
         const prev = zip ? (await readZipFiles(zip)).get(name) : undefined;
-        if (prev) previous = isText(prev) ? Buffer.from(prev).toString("utf8").slice(0, 1_000_000) : `[binary, ${prev.length} bytes]`;
+        if (prev) previous = isText(name, prev) ? Buffer.from(prev).toString("utf8") : `[binary, ${prev.length} bytes]`;
       }
-      return ok({ path: name, size: data.length, text: isText(data) ? Buffer.from(data).toString("utf8").slice(0, 1_000_000) : null, previous, previousVersion: prevVersion ?? null });
+      const text = isText(name, data) ? Buffer.from(data).toString("utf8") : null;
+      const total = Math.max(text?.length ?? 0, previous?.length ?? 0);
+      // Both texts are cut at the same place, never between the two halves of a surrogate pair.
+      let end = Math.min(offset + REVIEW_PART_CHARS, total);
+      if (end < total && end - 1 > offset && [text, previous].some((t) => t !== null && end < t.length && isHighSurrogate(t.charCodeAt(end - 1)))) end--;
+      return ok({
+        path: name,
+        size: data.length,
+        offset,
+        text: text === null ? null : text.slice(offset, end),
+        textLength: text?.length ?? null,
+        previous: previous === null ? null : previous.slice(offset, end),
+        previousLength: previous?.length ?? null,
+        previousVersion: prevVersion ?? null,
+        nextOffset: end < total ? end : null,
+      });
     },
   },
   ...(["approve", "reject", "rebuild"] as const).map((action): Route => ({
@@ -813,10 +834,17 @@ const adminRoutes: Route[] = [
   },
 ];
 
-function isText(data: Uint8Array): boolean {
+/** Code and text files a reviewer reads, whatever bytes they hold; the page shows control characters escaped. */
+const TEXT_FILE_EXTENSIONS = new Set(["js", "mjs", "cjs", "css", "json", "html", "md", "txt", "svg"]);
+
+/** Text by its extension; any other file is text unless a NUL byte comes early. */
+function isText(name: string, data: Uint8Array): boolean {
+  if (TEXT_FILE_EXTENSIONS.has(/\.([a-z0-9]+)$/i.exec(name)?.[1].toLowerCase() ?? "")) return true;
   const n = Math.min(data.length, 8000);
   for (let i = 0; i < n; i++) if (data[i] === 0) return false;
   return true;
 }
+
+const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
 
 export const v2Routes: Route[] = [...publicRoutes, ...authorRoutes, ...adminRoutes];

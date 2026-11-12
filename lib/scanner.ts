@@ -101,6 +101,9 @@ const BLOCKED_EXTENSIONS = new Set([
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // per file
 const MAX_LINE_BYTES = 1000;
 
+/** The review page loads a file in parts of this many characters (GET /api/v2/admin/submissions/:id/file). */
+export const REVIEW_PART_CHARS = 1_000_000;
+
 function ext(path: string): string {
   const m = /\.([a-zA-Z0-9]+)$/.exec(path);
   return m ? m[1].toLowerCase() : "";
@@ -228,6 +231,25 @@ export async function scanBundle(
     if (!isText) continue;
 
     const text = Buffer.from(data).toString("utf-8");
+
+    const nul = data.indexOf(0);
+    if (nul >= 0) {
+      findings.push({
+        severity: "warn",
+        rule: "text-nul-byte",
+        message: "Text file with a NUL byte. The review page shows it as \\u0000; check what it is for",
+        file: rel,
+        line: findLineNumber(text, Buffer.from(data.subarray(0, nul)).toString("utf-8").length),
+      });
+    }
+    if (text.length > REVIEW_PART_CHARS) {
+      findings.push({
+        severity: "warn",
+        rule: "file-over-review-part",
+        message: `Longer than ${REVIEW_PART_CHARS.toLocaleString("en")} characters: the review page shows it in parts. Load every part before approving`,
+        file: rel,
+      });
+    }
 
     if (isJs) {
       jsFiles++;
