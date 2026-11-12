@@ -1,13 +1,14 @@
 // Re-encodes every image an author supplies (icon, banner, screenshots,
 // theme previews) before the directory stores or shows it. Nothing an
-// author uploaded is ever served as-is: an SVG comes out as a PNG without
-// its scripts, a PNG or JPEG comes out without its metadata and anything
-// appended to it, and the type is decided by the bytes, not by the name.
+// author uploaded is ever served as-is: an SVG comes out as a PNG, a PNG or
+// JPEG comes out without its metadata and anything appended to it, and the
+// type is decided by the bytes, not by the name.
 //
 // The first bytes decide the format before any decoder sees the file: PNG,
 // JPEG, WebP, GIF, or SVG as UTF-8 text. Anything else, compressed SVG
-// included, is refused here. An SVG always passes the text checks, and the
-// decoder gets exactly the text that was checked.
+// included, is refused here. An SVG is parsed and checked as a tree
+// (lib/svg.ts), and the decoder gets that tree written out again, never the
+// author's text.
 //
 // In the worker, the decoding itself runs in a child process per image that
 // has none of the worker's secrets (decodeInChildProcess).
@@ -17,6 +18,7 @@
 import { fork } from "child_process";
 import crypto from "crypto";
 import sharp, { type Metadata, type OutputInfo } from "sharp";
+import { checkedSvg } from "./svg";
 
 // Every process that imports this module (the worker, the media conversion
 // script) can only load the five accepted formats, from a buffer. The
@@ -82,12 +84,10 @@ function refusedFormat(bytes: Buffer): string | null {
   return null;
 }
 
-// libxml2 reads UTF-16, UTF-32 and other encodings when a byte order mark,
-// the first bytes or the XML declaration say so, and the text checks would
-// not see what it reads. So an SVG is UTF-8 only: valid UTF-8 (a UTF-8 byte
-// order mark is dropped), no NUL, no other encoding declared. Returns the
-// text to check and decode, without leading whitespace (libxml2 refuses an
-// XML declaration after it), or null if the bytes are not SVG text.
+// An SVG is UTF-8 only: valid UTF-8 (a UTF-8 byte order mark is dropped), no
+// NUL, no other encoding declared, so the parser reads the text as libxml2
+// would. Returns the text to parse, without leading whitespace, or null if
+// the bytes are not SVG text.
 function svgText(bytes: Buffer): string | null {
   if (startsWith(bytes, 0, [0xfe, 0xff]) || startsWith(bytes, 0, [0xff, 0xfe]) || startsWith(bytes, 0, [0, 0, 0xfe, 0xff])) {
     throw new ImageError("SVG must be UTF-8 text");
@@ -106,22 +106,6 @@ function svgText(bytes: Buffer): string | null {
     if (encoding && !/^utf-?8$/i.test(encoding[1])) throw new ImageError("SVG must be UTF-8 text");
   }
   return text;
-}
-
-// librsvg resolves hrefs, and has had path traversal bugs doing it. Only
-// in-document references and inline raster images are allowed; DOCTYPEs
-// go too, since entities are the classic XML expansion attack.
-function checkSvg(text: string): void {
-  if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new ImageError("SVG must not contain a DOCTYPE or entities");
-  const hrefs = text.matchAll(/(?:xlink:)?href\s*=\s*(["'])([\s\S]*?)\1/gi);
-  for (const [, , value] of hrefs) {
-    const v = value.trim();
-    if (v.startsWith("#")) continue;
-    if (/^data:image\/(png|jpeg|gif|webp);base64,/i.test(v)) continue;
-    throw new ImageError("SVG must not reference external files");
-  }
-  if (/url\(\s*["']?(?!#|data:image\/)/i.test(text)) throw new ImageError("SVG must not reference external files");
-  if (/@import/i.test(text)) throw new ImageError("SVG must not import stylesheets");
 }
 
 let childScript: string | null = null;
@@ -199,9 +183,10 @@ export async function encodeImage(input: Buffer, kind: ImageKind): Promise<Encod
       const name = refusedFormat(input);
       throw new ImageError(name ? `Unsupported image type ${name}; use PNG, JPEG, WebP, GIF or SVG` : "Not a readable image");
     }
-    checkSvg(text);
+    const checked = checkedSvg(text);
+    if (!checked.ok) throw new ImageError(checked.reason);
     format = "svg";
-    bytes = Buffer.from(text, "utf8");
+    bytes = Buffer.from(checked.svg, "utf8");
   }
   if (childScript) return encodeInChild(childScript, bytes, kind);
 
