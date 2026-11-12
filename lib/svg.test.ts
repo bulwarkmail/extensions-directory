@@ -42,6 +42,10 @@ describe("checkedSvg refuses", () => {
     ["a url() to a data: URL in a style", svg(`<rect style="fill:url(${DATA}#g)"/>`), /external/],
     ["a style declaration without a value", svg('<rect style="fill"/>'), /not readable/],
     ["a quote left open in a style", svg(`<rect style="font-family:'a;fill:red"/>`), /not readable/],
+    ["a CSS filter function", svg('<rect filter="blur(2px)"/>'), /filter functions/],
+    ["a CSS filter function in a style", svg('<rect style="filter:drop-shadow(1px 1px 0 #000)"/>'), /filter functions/],
+    ["a filter function after a reference", svg('<filter id="f"><feFlood/></filter><rect filter="url(#f) blur(1px)"/>'), /filter functions/],
+    ["a filter inherited from the parent", svg('<filter id="f"><feFlood/></filter><g filter="url(#f)"><rect filter="inherit"/></g>'), /filter functions/],
   ])("%s", (_name, text, why) => {
     expect(reason(text)).toMatch(why);
   });

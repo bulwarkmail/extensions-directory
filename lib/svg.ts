@@ -66,6 +66,12 @@ const ID = "[A-Za-z0-9_.:-]+";
 const HREF = new RegExp(`^#${ID}$`);
 /** url(#id), optionally quoted, with an optional plain fallback paint. */
 const URL_REFERENCE = new RegExp(`^url\\(\\s*(['"]?)#${ID}\\1\\s*\\)(\\s+[#\\w.%-]+)?$`);
+/**
+ * The filter property: a <filter> element of the document, or none. librsvg
+ * also runs CSS filter functions (blur(), drop-shadow(), ...), which the
+ * limits on filter steps below would not see.
+ */
+const FILTER_VALUE = new RegExp(`^(none|url\\(\\s*(['"]?)#${ID}\\2\\s*\\))$`);
 /** What starts a CSS escape, comment, at-rule, block or !important, or markup. */
 const NOT_PLAIN = /[\\@{}<!]|\/\*/;
 /** Characters XML doesn't allow: control characters but tab and line breaks, U+FFFE, U+FFFF. */
@@ -141,6 +147,10 @@ function qualifiedName(name: string): [string, string] {
 /** An attribute or property value that may be drawn as it is. */
 function checkValue(name: string, value: string): void {
   if (NOT_PLAIN.test(value)) throw new Refusal("SVG attribute values must not hold CSS escapes, comments or rules");
+  // A filter value that points at another file gets the message about files below.
+  if (name === "filter" && !FILTER_VALUE.test(value.trim()) && !/url\s*\(\s*['"]?(?!#)/i.test(value)) {
+    throw new Refusal("SVG filters must be url(#id) references to a <filter> element; CSS filter functions such as blur() aren't accepted");
+  }
   if (/url\s*\(/i.test(value) && !(REFERENCES.has(name) && URL_REFERENCE.test(value.trim()))) {
     throw new Refusal("SVG must not reference external files");
   }
