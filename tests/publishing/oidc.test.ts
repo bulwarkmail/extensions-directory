@@ -27,8 +27,9 @@ beforeAll(async () => {
   key = pair.privateKey as CryptoKey;
   otherKey = (await generateKeyPair("RS256")).privateKey as CryptoKey;
   setJwks({ keys: [{ ...(await exportJWK(pair.publicKey)), kid: "k1", alg: "RS256", use: "sig" }] });
+  // alice/plugins (GitHub ids 111 / 1001) belongs to alice's own GitHub account.
   await db.insert(schema.publishers).values({
-    id: "pub-1", extensionId: "ext-jitsi", repository: "alice/plugins", repositoryId: "111", repositoryOwnerId: "222",
+    id: "pub-1", extensionId: "ext-jitsi", repository: "alice/plugins", repositoryId: "111", repositoryOwnerId: "1001",
     workflowPath: ".github/workflows/publish.yml", environment: "release", subpath: "jitsi-meet", allowedRefs: "tags", createdBy: "author-alice",
   });
 });
@@ -37,7 +38,7 @@ beforeEach(() => {
   resetFakes();
   db.delete(schema.rateLimits).run();
   addRepo("alice/plugins", {
-    info: { id: "111", ownerId: "222" } as never,
+    info: { id: "111", ownerId: "1001" } as never,
     refs: { "v3.0.0": sha(31) },
     commits: {
       [sha(31)]: Object.fromEntries(Object.entries(plainPlugin("jitsi-meet", "3.0.0")).map(([k, v]) => [`jitsi-meet/${k}`, v])),
@@ -52,7 +53,7 @@ let n = 0;
 async function token(over: Record<string, unknown> = {}, opts: { key?: CryptoKey; kid?: string; alg?: string; iat?: number; exp?: number } = {}) {
   const now = Math.floor(Date.now() / 1000);
   const claims = {
-    repository: "alice/plugins", repository_id: "111", repository_owner: "alice", repository_owner_id: "222",
+    repository: "alice/plugins", repository_id: "111", repository_owner: "alice", repository_owner_id: "1001",
     workflow_ref: "alice/plugins/.github/workflows/publish.yml@refs/tags/v3.0.0", ref: "refs/tags/v3.0.0", ref_type: "tag",
     sha: sha(31), environment: "release", run_id: "999", run_attempt: "1", actor: "alice", event_name: "push",
     jti: `jti-${++n}`, ...over,
@@ -191,10 +192,10 @@ describe("trusted publishing for an organization's extension", () => {
     await db.insert(schema.extensions).values({ id: "ext-orgp", slug: "org-plugin", name: "Org plugin", type: "plugin", pluginType: "hook", authorId: ORG, description: "x", githubRepo: "alice/plugins", subpath: "org-plugin", status: "pending" });
     await db.insert(schema.orgMembers).values({ orgId: ORG, authorId: "author-alice", role: "member" });
     await db.insert(schema.publishers).values({
-      id: "pub-org", extensionId: "ext-orgp", repository: "alice/plugins", repositoryId: "111", repositoryOwnerId: "222",
+      id: "pub-org", extensionId: "ext-orgp", repository: "alice/plugins", repositoryId: "111", repositoryOwnerId: "1001",
       workflowPath: ".github/workflows/publish.yml", environment: "release", subpath: "org-plugin", allowedRefs: "tags", createdBy: "author-alice",
     });
-    addRepo("alice/plugins", { info: { id: "111", ownerId: "222" } as never, commits: {
+    addRepo("alice/plugins", { info: { id: "111", ownerId: "1001" } as never, commits: {
       [sha(41)]: Object.fromEntries(Object.entries(plainPlugin("org-plugin", "1.0.0")).map(([k, v]) => [`org-plugin/${k}`, v])),
     } });
     const res = await publish(await token({ sha: sha(41) }), { subpath: "org-plugin" });

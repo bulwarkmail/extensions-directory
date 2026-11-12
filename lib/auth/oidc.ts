@@ -5,10 +5,11 @@
 import { createLocalJWKSet, createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey, errors as joseErrors } from "jose";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { authors, extensions, oidcTokenUses, publishers } from "@/lib/db/schema";
+import { authors, extensions, oidcTokenUses, orgMembers, publishers } from "@/lib/db/schema";
+import { audit, SYSTEM } from "@/lib/audit";
 import { validateManifest } from "@/lib/manifest";
 import { source } from "@/lib/sources";
-import { HttpError } from "./session";
+import { hasRole, HttpError } from "./session";
 import { isBanned } from "./guard";
 
 export const GITHUB_ISSUER = "https://token.actions.githubusercontent.com";
@@ -108,6 +109,22 @@ export interface PublishTarget {
 
 type Candidate = { p: typeof publishers.$inferSelect; e: typeof extensions.$inferSelect };
 
+/**
+ * Whether the account may name a repository with this GitHub owner id in a
+ * trusted publisher: its own GitHub account, an organization author it is a
+ * member of, or any repository for an admin. Checked when a row is added,
+ * and against the token's owner for every publish through the row.
+ */
+export function mayPublishFrom(authorId: string | null | undefined, ownerId: string): boolean {
+  if (!authorId) return false;
+  const a = db.select({ githubId: authors.githubId, role: authors.role }).from(authors).where(eq(authors.id, authorId)).get();
+  if (!a) return false;
+  if (hasRole(a.role, "admin") || String(a.githubId) === ownerId) return true;
+  return db.select({ githubId: authors.githubId }).from(orgMembers).innerJoin(authors, eq(authors.id, orgMembers.orgId))
+    .where(and(eq(orgMembers.authorId, authorId), eq(authors.kind, "org"))).all()
+    .some((o) => String(o.githubId) === ownerId);
+}
+
 /** A row of a suspended extension, or one whose extension owner or creator is banned, can't publish. */
 function canPublish(c: Candidate): boolean {
   if (c.e.status === "suspended") return false;
@@ -158,12 +175,20 @@ async function pickOne(rows: Candidate[], claims: GithubClaims, subpath: string)
  */
 export async function matchPublisher(claims: GithubClaims, body: { subpath: string; ref?: string; dryRun: boolean }): Promise<PublishTarget> {
   const path = workflowPath(claims);
-  const candidates = db
+  const rows = db
     .select({ p: publishers, e: extensions })
     .from(publishers)
     .innerJoin(extensions, eq(extensions.id, publishers.extensionId))
     .where(and(eq(publishers.repositoryId, claims.repository_id), eq(publishers.repositoryOwnerId, claims.repository_owner_id), isNull(publishers.disabledAt)))
     .all();
+  // A row counts only while its creator could still add it: one whose creator
+  // no longer owns the repository or belongs to its organization is left out
+  // as if it weren't there, and logged by its id.
+  const candidates: Candidate[] = [];
+  for (const c of rows) {
+    if (mayPublishFrom(c.p.createdBy, claims.repository_owner_id)) candidates.push(c);
+    else await audit(SYSTEM, "publisher.skip", { kind: "publisher", id: c.p.id }, { slug: c.e.slug, createdBy: c.p.createdBy, reason: "creator_not_owner" });
+  }
   if (!candidates.length) throw new HttpError(403, `No extension trusts publishing from ${claims.repository}`, "no_publisher");
   const byWorkflow = candidates.filter((c) => c.p.workflowPath === path);
   if (!byWorkflow.length) throw new HttpError(403, `Workflow ${path ?? claims.workflow_ref} is not a trusted publisher here`, "wrong_workflow");

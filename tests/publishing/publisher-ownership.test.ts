@@ -40,7 +40,7 @@ let n = 0;
 async function aliceToken(tag: string, commit: string, over: Record<string, unknown> = {}) {
   const now = Math.floor(Date.now() / 1000);
   return new SignJWT({
-    repository: "alice/plugins", repository_id: "111", repository_owner: "alice", repository_owner_id: "222",
+    repository: "alice/plugins", repository_id: "111", repository_owner: "alice", repository_owner_id: "1001",
     workflow_ref: `alice/plugins/.github/workflows/publish.yml@refs/tags/${tag}`, ref: `refs/tags/${tag}`, ref_type: "tag",
     sha: commit, environment: "release", run_id: "999", run_attempt: "1", actor: "alice", event_name: "push", jti: `own-${++n}`, ...over,
   } as never).setProtectedHeader({ alg: "RS256", kid: "k1" }).setIssuer(GITHUB_ISSUER).setAudience("https://extensions.test")
@@ -57,7 +57,7 @@ beforeAll(async () => {
   await db.insert(schema.authors).values({ id: "mallory", githubId: 6001, githubLogin: "mallory", displayName: "Mallory" });
   // alice's own trusted publisher for her plugin in alice/plugins/jitsi-meet.
   await db.insert(schema.publishers).values({
-    id: "pub-alice", extensionId: "ext-jitsi", repository: "alice/plugins", repositoryId: "111", repositoryOwnerId: "222",
+    id: "pub-alice", extensionId: "ext-jitsi", repository: "alice/plugins", repositoryId: "111", repositoryOwnerId: "1001",
     workflowPath: ".github/workflows/publish.yml", environment: "release", subpath: "jitsi-meet", allowedRefs: "tags", createdBy: "author-alice",
   });
 });
@@ -66,9 +66,9 @@ beforeEach(() => {
   signOut();
   resetFakes();
   db.delete(schema.rateLimits).run();
-  // alice's repository (GitHub ids 111 / 222): her listed plugin and a new one she has not registered yet.
+  // alice's repository (GitHub ids 111 / 1001, her own account): her listed plugin and a new one she has not registered yet.
   addRepo("alice/plugins", {
-    info: { id: "111", ownerId: "222" } as never,
+    info: { id: "111", ownerId: "1001" } as never,
     refs: {},
     commits: {
       [sha(41)]: Object.fromEntries(Object.entries(plainPlugin("jitsi-meet", "4.0.0")).map(([k, v]) => [`jitsi-meet/${k}`, v])),
@@ -159,7 +159,10 @@ describe("adding a trusted publisher", () => {
 
 describe("matching a publish to one extension", () => {
   beforeAll(async () => {
-    await db.insert(schema.authors).values({ id: "squatter", githubId: 6002, githubLogin: "squatter", displayName: "Squatter" });
+    await db.insert(schema.authors).values([
+      { id: "squatter", githubId: 6002, githubLogin: "squatter", displayName: "Squatter" },
+      { id: "staff-m", githubId: 3010, githubLogin: "staff-m", displayName: "Staff", role: "admin" },
+    ]);
     await db.insert(schema.extensions).values({
       id: "ext-squat", slug: "squatted", name: "Squatted", type: "plugin", pluginType: "hook", authorId: "squatter", description: "x",
       githubRepo: "squatter/x", subpath: "", status: "pending", reservedAt: new Date(),
@@ -171,7 +174,7 @@ describe("matching a publish to one extension", () => {
     const folder = (dir: string, id: string, version: string) =>
       Object.fromEntries(Object.entries(plainPlugin(id, version)).map(([k, v]) => [`${dir}/${k}`, v]));
     addRepo("alice/plugins", {
-      info: { id: "111", ownerId: "222" } as never,
+      info: { id: "111", ownerId: "1001" } as never,
       refs: {},
       commits: {
         [sha(51)]: folder("jitsi-meet", "jitsi-meet", "4.1.0"),
@@ -194,8 +197,8 @@ describe("matching a publish to one extension", () => {
 
   /** A row on another extension for alice's repository, workflow and folder, as staff could have added it. */
   const otherRow = (over: Partial<typeof schema.publishers.$inferInsert> = {}) => db.insert(schema.publishers).values({
-    id: "pub-other", extensionId: "ext-squat", repository: "alice/plugins", repositoryId: "111", repositoryOwnerId: "222",
-    workflowPath: ".github/workflows/publish.yml", environment: null, subpath: "jitsi-meet", allowedRefs: "tags", createdBy: "squatter", ...over,
+    id: "pub-other", extensionId: "ext-squat", repository: "alice/plugins", repositoryId: "111", repositoryOwnerId: "1001",
+    workflowPath: ".github/workflows/publish.yml", environment: null, subpath: "jitsi-meet", allowedRefs: "tags", createdBy: "staff-m", ...over,
   }).run();
 
   async function expectAlices(res: Response) {
@@ -216,7 +219,7 @@ describe("matching a publish to one extension", () => {
   it("takes the row naming the run's environment when the extension also has one without", async () => {
     db.update(schema.publishers).set({ lastUsedAt: null }).where(eq(schema.publishers.id, "pub-alice")).run();
     db.insert(schema.publishers).values({
-      id: "pub-alice-any", extensionId: "ext-jitsi", repository: "alice/plugins", repositoryId: "111", repositoryOwnerId: "222",
+      id: "pub-alice-any", extensionId: "ext-jitsi", repository: "alice/plugins", repositoryId: "111", repositoryOwnerId: "1001",
       workflowPath: ".github/workflows/publish.yml", environment: null, subpath: "jitsi-meet", allowedRefs: "tags", createdBy: "author-alice",
     }).run();
     await expectAlices(await publish(await aliceToken("jitsi-meet@4.3.0", sha(53)), "jitsi-meet"));
@@ -231,8 +234,8 @@ describe("matching a publish to one extension", () => {
   it("doesn't count a row of a suspended extension or of an account banned since", async () => {
     otherRow();
     db.insert(schema.publishers).values({
-      id: "pub-spare", extensionId: "ext-squat", repository: "alice/plugins", repositoryId: "111", repositoryOwnerId: "222",
-      workflowPath: ".github/workflows/publish.yml", environment: null, subpath: "spare", allowedRefs: "tags", createdBy: "squatter",
+      id: "pub-spare", extensionId: "ext-squat", repository: "alice/plugins", repositoryId: "111", repositoryOwnerId: "1001",
+      workflowPath: ".github/workflows/publish.yml", environment: null, subpath: "spare", allowedRefs: "tags", createdBy: "staff-m",
     }).run();
     const squatted = () => db.select().from(schema.submissions).where(eq(schema.submissions.extensionId, "ext-squat")).all();
 
