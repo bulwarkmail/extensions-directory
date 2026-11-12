@@ -25,6 +25,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   const maintains = !!s.extensionId && !!(await memberRole(user.id, s.extensionId));
   const own = maintains || s.authorId === user.id;
   const superAdmin = user.role === "super_admin";
+  // An approval names the bundle this page shows (artifactSha256); after a rebuild the server refuses it.
   const approveAsk = "Notes for the author (optional). Approving publishes this exact bundle, signed.";
   let files: { name: string; size: number }[] = [];
   if (s.artifactPath) {
@@ -59,9 +60,9 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
       {reviewable ? (
         <div className="bw-btns">
           {!own ? (
-            <ActionButton path={`/admin/submissions/${s.id}/approve`} label="Approve and publish" ask={approveAsk} askField="notes" askRequired={false} />
+            <ActionButton path={`/admin/submissions/${s.id}/approve`} label="Approve and publish" body={{ artifactSha256: s.artifactSha256 }} ask={approveAsk} askField="notes" askRequired={false} />
           ) : superAdmin ? (
-            <ActionButton path={`/admin/submissions/${s.id}/approve`} label="Approve your own submission" body={{ selfReview: true }} confirm={maintains ? "You maintain this extension. Approve your own submission?" : "You submitted this version. Approve your own submission?"} ask={approveAsk} askField="notes" askRequired={false} />
+            <ActionButton path={`/admin/submissions/${s.id}/approve`} label="Approve your own submission" body={{ selfReview: true, artifactSha256: s.artifactSha256 }} confirm={maintains ? "You maintain this extension. Approve your own submission?" : "You submitted this version. Approve your own submission?"} ask={approveAsk} askField="notes" askRequired={false} />
           ) : null}
           <ActionButton path={`/admin/submissions/${s.id}/reject`} label="Reject" ghost ask="Why? The author gets this." askField="notes" />
           <ActionButton path={`/admin/submissions/${s.id}/rebuild`} label="Build again" ghost confirm="Build this commit again?" />

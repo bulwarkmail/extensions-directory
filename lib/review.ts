@@ -46,10 +46,18 @@ function get(id: string) {
   return s;
 }
 
-export async function approveSubmission(id: string, reviewerId: string, notes: string | null, request?: Request, opts: { selfReview?: boolean } = {}) {
+const BUNDLE_CHANGED = "This submission was built again since the review page was loaded, so its bundle is not the one you reviewed. Open it again and review the new build.";
+
+/**
+ * Approve a submission. `artifactSha256` is the hash of the staged bundle the
+ * reviewer saw (the review page and the API route always send it); when the
+ * submission was built again with other bytes since, the approval is refused.
+ */
+export async function approveSubmission(id: string, reviewerId: string, notes: string | null, request?: Request, opts: { selfReview?: boolean; artifactSha256?: string } = {}) {
   const sub = get(id);
   if (sub.dryRun) throw new HttpError(400, "A dry run can't be approved", "dry_run");
   const selfReview = await assertMayApprove(reviewerId, sub.authorId, sub.extensionId, opts.selfReview === true);
+  if (opts.artifactSha256 !== undefined && opts.artifactSha256 !== sub.artifactSha256) throw new HttpError(409, BUNDLE_CHANGED, "bundle_changed");
   try {
     await assertActorAllowed(sub.authorId, sub.extensionId);
   } catch (err) {
@@ -58,8 +66,13 @@ export async function approveSubmission(id: string, reviewerId: string, notes: s
   }
   const res = db.update(submissions)
     .set({ status: "publishing", reviewedBy: reviewerId, reviewerId: legacyReviewerId(reviewerId), reviewNotes: notes, reviewedAt: new Date(), claimedAt: null, error: null })
-    .where(and(eq(submissions.id, id), eq(submissions.status, "awaiting_review"))).run();
-  if (res.changes !== 1) throw new HttpError(409, `Submission is ${get(id).status}, not waiting for review`, "conflict");
+    .where(and(eq(submissions.id, id), eq(submissions.status, "awaiting_review"),
+      opts.artifactSha256 !== undefined ? eq(submissions.artifactSha256, opts.artifactSha256) : undefined)).run();
+  if (res.changes !== 1) {
+    const now = get(id);
+    if (now.status === "awaiting_review" && opts.artifactSha256 !== undefined && now.artifactSha256 !== opts.artifactSha256) throw new HttpError(409, BUNDLE_CHANGED, "bundle_changed");
+    throw new HttpError(409, `Submission is ${now.status}, not waiting for review`, "conflict");
+  }
   await audit({ kind: "admin", id: reviewerId }, "submission.approve", { kind: "submission", id }, { slug: sub.slug, version: sub.version, selfReview }, request);
 }
 

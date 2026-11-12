@@ -25,7 +25,10 @@ const send = async (path: string, body: Record<string, unknown> = {}) => {
   const res = await dispatch("POST")(req(`/api/v2${path}`, { method: "POST", body, headers: { origin: new URL(BASE).origin } }));
   return res.status;
 };
-const approve = (id: string, body: Record<string, unknown> = {}) => send(`/admin/submissions/${id}/approve`, body);
+// The page sends the hash of the bundle it shows with every approval (tests/approval-pins-bundle.test.ts).
+const approve = (id: string, body: Record<string, unknown> = {}) => send(`/admin/submissions/${id}/approve`, {
+  artifactSha256: db.select().from(schema.submissions).where(eq(schema.submissions.id, id)).get()!.artifactSha256, ...body,
+});
 const statusOf = (id: string) => db.select().from(schema.submissions).where(eq(schema.submissions.id, id)).get()!.status;
 
 let commitNo = 60;

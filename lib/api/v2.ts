@@ -662,9 +662,13 @@ const adminRoutes: Route[] = [
     handler: async (ctx) => {
       const body = await readJson(ctx.request, 64 * 1024);
       const notes = str(body.notes, "notes", { optional: true, max: 10_000 }) ?? null;
-      // selfReview: a super admin approving their own work says so (lib/review.ts).
-      if (action === "approve") await approveSubmission(ctx.params.id, ctx.user.id, notes, ctx.request, { selfReview: body.selfReview === true });
-      else if (action === "reject") await rejectSubmission(ctx.params.id, ctx.user.id, notes ?? "", ctx.request);
+      if (action === "approve") {
+        // The hash of the bundle the reviewer saw; selfReview: a super admin approving their own work says so (lib/review.ts).
+        if (typeof body.artifactSha256 !== "string" || !/^[0-9a-f]{64}$/.test(body.artifactSha256)) {
+          throw new HttpError(400, "artifactSha256 must be the SHA-256 of the bundle the review page shows", "bad_request");
+        }
+        await approveSubmission(ctx.params.id, ctx.user.id, notes, ctx.request, { selfReview: body.selfReview === true, artifactSha256: body.artifactSha256 });
+      } else if (action === "reject") await rejectSubmission(ctx.params.id, ctx.user.id, notes ?? "", ctx.request);
       else await rebuildSubmission(ctx.params.id, actorOf(ctx, true), ctx.request);
       return ok(submissionView(db.select().from(submissions).where(eq(submissions.id, ctx.params.id)).get()!));
     },
