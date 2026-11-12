@@ -24,7 +24,7 @@ const { setRunner } = await import("@/lib/pipeline/sandbox");
 const { resetSignerCache, verify } = await import("@/lib/signing");
 const { readStaged } = await import("@/lib/pipeline/staging");
 
-const ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><script>alert(1)</script><rect width="32" height="32"/></svg>';
+const ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32"/></svg>';
 let signerPublic = "";
 
 beforeAll(async () => {

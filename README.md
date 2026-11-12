@@ -39,6 +39,10 @@ npm run build:scripts && node deploy/dist/worker.cjs   # the worker, with Docker
 `npx tsx scripts/seed-admin.ts <github-login>` makes a GitHub account a super admin. Without Docker,
 set `SANDBOX_RUNNER=off`: extensions without a build step still go through.
 
+The `Dockerfile` and `docker-compose.yml` run the website only. They start no worker, so submissions
+stay queued and nothing is built, signed or published, and they don't apply the database migrations.
+Production runs under pm2 as described under Deploying.
+
 Checks, as CI runs them: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`,
 `npm run build:scripts`, `npm run build:cli`.
 

@@ -37,19 +37,26 @@ describe("reencodeStoredMedia", () => {
       ...db.prepare("select path as p from screenshots").all(),
       ...db.prepare("select preview_path as p from theme_previews").all(),
     ].map((r) => (r as { p: string }).p);
-    expect(paths.length).toBe(6);
+    expect(paths.length).toBe(3);
     for (const p of paths) {
       expect(p).toMatch(/^media\/[a-z0-9-]+\/[a-z0-9-]+-[0-9a-f]{12}\.(png|webp)$/);
       const meta = await sharp(fs.readFileSync(path.join(uploads(), p))).metadata();
       expect(["png", "webp"]).toContain(meta.format);
     }
-    // The SVG icon with a script became a PNG without it.
-    const nordIcon = (db.prepare("select icon_path as p from extensions where id = 'ext-nord'").get() as { p: string }).p;
-    expect(nordIcon.endsWith(".png")).toBe(true);
-    expect(fs.readFileSync(path.join(uploads(), nordIcon)).toString("latin1")).not.toContain("alert");
-    // The broken screenshot is gone, the others kept their order.
-    expect(report.dropped).toEqual([expect.objectContaining({ id: "shot-broken", reason: "Not a readable image" })]);
-    expect(db.prepare("select id from screenshots order by sort_order").all()).toEqual([{ id: "shot-1" }, { id: "shot-2" }]);
+    // The SVGs with a script (the nord icon, the jitsi banner, the second
+    // screenshot) are refused like the broken screenshot: icon and banner
+    // cleared, screenshots deleted, the remaining screenshot kept.
+    expect(db.prepare("select icon_path as p from extensions where id = 'ext-nord'").get()).toEqual({ p: null });
+    expect(report.dropped).toHaveLength(4);
+    expect(report.dropped).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ table: "extensions", id: "ext-nord", reason: "SVG must not contain scripts" }),
+        expect.objectContaining({ table: "extensions", id: "ext-jitsi", reason: "SVG must not contain scripts" }),
+        expect.objectContaining({ id: "shot-2", reason: "SVG must not contain scripts" }),
+        expect.objectContaining({ id: "shot-broken", reason: "Not a readable image" }),
+      ])
+    );
+    expect(db.prepare("select id from screenshots order by sort_order").all()).toEqual([{ id: "shot-1" }]);
     // Old files stay on disk.
     expect(fs.existsSync(path.join(uploads(), "icons/nord/icon.svg"))).toBe(true);
     db.close();

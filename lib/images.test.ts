@@ -9,15 +9,19 @@ async function solid(width: number, height: number, format: "png" | "jpeg" | "ti
 }
 
 describe("encodeImage", () => {
-  it("turns an SVG with a script into a PNG without it", async () => {
-    const svg = Buffer.from(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><script>alert("pwned")</script><rect width="64" height="64" fill="#336"/></svg>'
-    );
+  it("turns an SVG into a PNG", async () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#336"/></svg>');
     const out = await encodeImage(svg, "icon");
     expect(out.data.subarray(0, 4)).toEqual(PNG_MAGIC);
     expect(out.contentType).toBe("image/png");
     expect([out.width, out.height]).toEqual([512, 512]);
-    expect(out.data.toString("latin1")).not.toContain("pwned");
+  });
+
+  it("refuses an SVG with a script", async () => {
+    const svg = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><script>alert("pwned")</script><rect width="64" height="64" fill="#336"/></svg>'
+    );
+    await expect(encodeImage(svg, "icon")).rejects.toThrow(/scripts/);
   });
 
   it("drops metadata and anything appended to the file", async () => {

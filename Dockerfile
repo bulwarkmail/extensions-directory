@@ -1,4 +1,5 @@
-FROM node:22-alpine AS base
+# The Node major CI and the server use.
+FROM node:24-alpine AS base
 
 # Install dependencies
 FROM base AS deps
@@ -22,12 +23,13 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
+# The app's files belong to root and are read-only for nextjs.
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 
-# Create data directory for uploads
-RUN mkdir -p /app/data/uploads && chown nextjs:nodejs /app/data/uploads
+# The data folder (database and uploads) is the only one nextjs owns.
+RUN mkdir -p /app/data/uploads && chown -R nextjs:nodejs /app/data
 
 USER nextjs
 
