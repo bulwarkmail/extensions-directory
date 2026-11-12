@@ -2,12 +2,23 @@
 // the keys are frozen (tests/v1/responses.test.ts snapshots them). Building
 // them from explicit lists means a new database column never shows up in
 // v1 by accident, and private columns can be blanked while the key stays.
+import { grantOf } from "@/lib/webmail-compat/grants";
+
 type Row = Record<string, unknown>;
 
 function pick(row: Row, keys: readonly string[], blank: readonly string[] = []): Row {
   const out: Row = {};
   for (const k of keys) out[k] = blank.includes(k) ? null : (row[k] ?? null);
   return out;
+}
+
+/**
+ * A version's `permissions` as a webmail grants them (optional ones included),
+ * read from its manifest; the stored column for a row without one.
+ */
+function grantedPermissions(version: Row | null | undefined): unknown {
+  const manifest = version?.manifest;
+  return manifest && typeof manifest === "object" ? grantOf(manifest).permissions : (version?.permissions ?? null);
 }
 
 const AUTHOR_KEYS = [
@@ -39,7 +50,7 @@ export function v1Author(row: Row | null | undefined): Row | null {
 
 /** A published version without the reviewer's notes or the scan report. */
 export function v1Version(row: Row): Row {
-  return pick(row, VERSION_KEYS, ["scanReport", "reviewerId", "reviewNotes"]);
+  return { ...pick(row, VERSION_KEYS, ["scanReport", "reviewerId", "reviewNotes"]), permissions: grantedPermissions(row) };
 }
 
 /** One entry of /extensions and of the featured, popular and recent lists. */
@@ -61,6 +72,7 @@ export function v1Detail(row: Row & {
 }): Row {
   return {
     ...pick(row, EXTENSION_KEYS),
+    ...(row.latestVersion ? { permissions: grantedPermissions(row.latestVersion) } : {}),
     author: v1Author(row.author),
     versions: row.versions.map(v1Version),
     screenshots: row.screenshots.map((s) => pick(s, SCREENSHOT_KEYS)),

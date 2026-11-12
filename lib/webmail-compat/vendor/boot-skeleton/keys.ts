@@ -1,4 +1,4 @@
-// Copied from the webmail (bulwarkmail/webmail 7cf733225, lib/boot-skeleton/keys.ts)
+// Copied from the webmail (bulwarkmail/webmail 5434b6fa2, lib/boot-skeleton/keys.ts)
 // by scripts/sync-webmail-compat.mjs. Do not edit; sync again instead.
 // @ts-nocheck
 /* eslint-disable */

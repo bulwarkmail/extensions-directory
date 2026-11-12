@@ -1,6 +1,6 @@
-import { Eye, LayoutPanelTop, TriangleAlert, type LucideIcon } from "lucide-react";
+import { Eye, Globe, KeyRound, LayoutPanelTop, ShieldAlert, TriangleAlert, type LucideIcon } from "lucide-react";
 import { ICON } from "@/components/icon";
-import { HIGH_RISK_PERMISSIONS, IMPLICIT, permissionText } from "@/lib/webmail-compat";
+import { HIGH_RISK_PERMISSIONS, IMPLICIT, permissionText, type Grant } from "@/lib/webmail-compat";
 
 type Group = "act" | "read" | "ui";
 
@@ -61,6 +61,62 @@ export function PermissionList({ permissions: all, isTheme = false }: { permissi
           </div>
         );
       })}
+    </div>
+  );
+}
+
+const ORIGIN_GROUPS: { key: "httpOrigins" | "apiPostPaths" | "frameOrigins"; title: string }[] = [
+  { key: "httpOrigins", title: "Servers it may contact" },
+  { key: "apiPostPaths", title: "Webmail routes it may call in the user's name" },
+  { key: "frameOrigins", title: "Sites it may show inside the webmail" },
+];
+
+/**
+ * Everything a webmail grants an extension (lib/webmail-compat/grants.ts):
+ * the privileged tier, the permissions with the optional ones, the servers
+ * and routes it may reach and where its credentials are sent. Each group is
+ * in the warning colour, like the high-risk permissions.
+ */
+export function GrantList({ grant, isTheme = false }: { grant: Grant; isTheme?: boolean }) {
+  return (
+    <div>
+      {grant.tier === "privileged" ? (
+        <div className="dx-perm-group dx-perm-act">
+          <h3>
+            <ShieldAlert size={16} {...ICON} />
+            Privileged tier
+          </h3>
+          <p className="bw-help">Runs in a frame on the webmail&apos;s own origin, with the webmail&apos;s own storage and cryptography, instead of the closed sandbox.</p>
+        </div>
+      ) : null}
+      <PermissionList permissions={grant.permissions} isTheme={isTheme} />
+      {ORIGIN_GROUPS.map(({ key, title }) => grant[key].length ? (
+        <div key={key} className="dx-perm-group dx-perm-act">
+          <h3>
+            <Globe size={16} {...ICON} />
+            {title}
+          </h3>
+          <ul>
+            {grant[key].map((o) => <li key={o}><span>{o}</span><code className="bw-icode">{key}</code></li>)}
+          </ul>
+        </div>
+      ) : null)}
+      {grant.credentials.length ? (
+        <div className="dx-perm-group dx-perm-act">
+          <h3>
+            <KeyRound size={16} {...ICON} />
+            Sends stored credentials to
+          </h3>
+          <ul>
+            {grant.credentials.map((c) => (
+              <li key={c.id}>
+                <span>{c.label}: {c.binding}{c.setBy === "admin" && c.origin ? ` (default ${c.origin})` : ""}</span>
+                <code className="bw-icode">{c.scope === "admin" ? "admin's secret" : "each user's account"}</code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

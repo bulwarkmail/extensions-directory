@@ -1,4 +1,19 @@
 import type { NormalizedManifest } from "./manifest";
+import { HIDDEN_CHARACTER_SOURCE } from "./hidden-characters";
+
+// Hidden characters other than NUL, which has its own finding.
+const HIDDEN_NOT_NUL = new RegExp(`(?!\\0)${HIDDEN_CHARACTER_SOURCE}`, "gu");
+
+/** How many hidden characters a text holds, and where the first one is. */
+function countHidden(text: string): { count: number; first: number } {
+  let count = 0;
+  let first = -1;
+  for (const m of text.matchAll(HIDDEN_NOT_NUL)) {
+    if (first < 0) first = m.index;
+    count++;
+  }
+  return { count, first };
+}
 
 interface ResolvedBundle {
   files: Map<string, Uint8Array>;
@@ -44,6 +59,7 @@ const JS_BLOCK_RULES: Rule[] = [
   { rule: "js-javascript-url", pattern: /(?:href|src|action|formaction)\s*=\s*["']javascript:/i, message: "javascript: URLs are not allowed" },
   { rule: "js-settimeout-string", pattern: /\bsetTimeout\s*\(\s*['"`]/, message: "setTimeout with a string argument is not allowed (acts like eval)" },
   { rule: "js-setinterval-string", pattern: /\bsetInterval\s*\(\s*['"`]/, message: "setInterval with a string argument is not allowed (acts like eval)" },
+  { rule: "js-desktop-bridge", pattern: /\bbulwarkDesktop\b/, message: "Reaches the desktop app's bridge directly; plugins use the api they are given, such as api.keystore" },
   { rule: "js-script-injection", pattern: /createElement\s*\(\s*['"`]script['"`]\s*\)/i, message: "Programmatic <script> creation is not allowed" },
 ];
 
@@ -99,6 +115,9 @@ const BLOCKED_EXTENSIONS = new Set([
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // per file
 const MAX_LINE_BYTES = 1000;
+
+/** The review page loads a file in parts of this many characters (GET /api/v2/admin/submissions/:id/file). */
+export const REVIEW_PART_CHARS = 1_000_000;
 
 function ext(path: string): string {
   const m = /\.([a-zA-Z0-9]+)$/.exec(path);
@@ -227,6 +246,35 @@ export async function scanBundle(
     if (!isText) continue;
 
     const text = Buffer.from(data).toString("utf-8");
+
+    const nul = data.indexOf(0);
+    if (nul >= 0) {
+      findings.push({
+        severity: "warn",
+        rule: "text-nul-byte",
+        message: "Text file with a NUL byte. The review page shows it as \\u0000; check what it is for",
+        file: rel,
+        line: findLineNumber(text, Buffer.from(data.subarray(0, nul)).toString("utf-8").length),
+      });
+    }
+    const hidden = countHidden(text);
+    if (hidden.count > 0) {
+      findings.push({
+        severity: "warn",
+        rule: "text-hidden-characters",
+        message: `${hidden.count.toLocaleString("en")} invisible characters (zero-width, bidirectional, variation selectors, tags or other format and control characters). The review page shows them as escapes; check what they are for`,
+        file: rel,
+        line: findLineNumber(text, hidden.first),
+      });
+    }
+    if (text.length > REVIEW_PART_CHARS) {
+      findings.push({
+        severity: "warn",
+        rule: "file-over-review-part",
+        message: `Longer than ${REVIEW_PART_CHARS.toLocaleString("en")} characters: the review page shows it in parts. Load every part before approving`,
+        file: rel,
+      });
+    }
 
     if (isJs) {
       jsFiles++;

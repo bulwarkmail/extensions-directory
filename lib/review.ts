@@ -1,13 +1,39 @@
 // Review decisions. Each is a compare-and-set on the submission status, so
 // two reviewers can't both decide, and a decision on a stale page fails.
+//
+// Nobody approves their own work: not the submitter of a version or the
+// proposer of a text change, and not a maintainer of the extension (directly
+// or through the organization that owns it). A super admin may, by sending
+// `selfReview: true`, so a directory run by one person keeps working; the
+// audit log records it.
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "./db/client";
-import { directoryAdmins, submissions } from "./db/schema";
+import { directoryAdmins, submissions, textChanges } from "./db/schema";
 import { HttpError } from "./auth/session";
-import { assertActorAllowed, Forbidden } from "./auth/guard";
+import { assertActorAllowed, Forbidden, loadAuthor, memberRole } from "./auth/guard";
 import { audit, type Actor } from "./audit";
 import { queueNotification } from "./notify";
 import { clearStaging } from "./pipeline/staging";
+import { decideTextChange } from "./lifecycle";
+
+/** Whether `reviewerId` wrote it (`authorId`) or maintains the extension. */
+export async function isOwnWork(reviewerId: string, authorId: string | null, extensionId: string | null): Promise<boolean> {
+  if (authorId === reviewerId) return true;
+  return !!extensionId && !!(await memberRole(reviewerId, extensionId));
+}
+
+/**
+ * Refuses (403) an approval of the reviewer's own work, unless a super admin
+ * asks for it with `selfReview`. Returns whether it is their own work.
+ */
+async function assertMayApprove(reviewerId: string, authorId: string | null, extensionId: string | null, selfReview: boolean): Promise<boolean> {
+  if (!(await isOwnWork(reviewerId, authorId, extensionId))) return false;
+  const reviewer = await loadAuthor(reviewerId);
+  if (reviewer?.role === "super_admin" && selfReview) return true;
+  throw new HttpError(403, reviewer?.role === "super_admin"
+    ? "You wrote this or maintain this extension. Send selfReview: true to approve it yourself, or leave it to another reviewer."
+    : "You wrote this or maintain this extension, so another reviewer has to approve it.", "self_review");
+}
 
 function legacyReviewerId(authorId: string): string | null {
   // Older rows reference directory_admins; keep filling it where we can.
@@ -20,9 +46,18 @@ function get(id: string) {
   return s;
 }
 
-export async function approveSubmission(id: string, reviewerId: string, notes: string | null, request?: Request) {
+const BUNDLE_CHANGED = "This submission was built again since the review page was loaded, so its bundle is not the one you reviewed. Open it again and review the new build.";
+
+/**
+ * Approve a submission. `artifactSha256` is the hash of the staged bundle the
+ * reviewer saw (the review page and the API route always send it); when the
+ * submission was built again with other bytes since, the approval is refused.
+ */
+export async function approveSubmission(id: string, reviewerId: string, notes: string | null, request?: Request, opts: { selfReview?: boolean; artifactSha256?: string } = {}) {
   const sub = get(id);
   if (sub.dryRun) throw new HttpError(400, "A dry run can't be approved", "dry_run");
+  const selfReview = await assertMayApprove(reviewerId, sub.authorId, sub.extensionId, opts.selfReview === true);
+  if (opts.artifactSha256 !== undefined && opts.artifactSha256 !== sub.artifactSha256) throw new HttpError(409, BUNDLE_CHANGED, "bundle_changed");
   try {
     await assertActorAllowed(sub.authorId, sub.extensionId);
   } catch (err) {
@@ -31,9 +66,23 @@ export async function approveSubmission(id: string, reviewerId: string, notes: s
   }
   const res = db.update(submissions)
     .set({ status: "publishing", reviewedBy: reviewerId, reviewerId: legacyReviewerId(reviewerId), reviewNotes: notes, reviewedAt: new Date(), claimedAt: null, error: null })
-    .where(and(eq(submissions.id, id), eq(submissions.status, "awaiting_review"))).run();
-  if (res.changes !== 1) throw new HttpError(409, `Submission is ${get(id).status}, not waiting for review`, "conflict");
-  await audit({ kind: "admin", id: reviewerId }, "submission.approve", { kind: "submission", id }, { slug: sub.slug, version: sub.version, selfReview: sub.authorId === reviewerId }, request);
+    .where(and(eq(submissions.id, id), eq(submissions.status, "awaiting_review"),
+      opts.artifactSha256 !== undefined ? eq(submissions.artifactSha256, opts.artifactSha256) : undefined)).run();
+  if (res.changes !== 1) {
+    const now = get(id);
+    if (now.status === "awaiting_review" && opts.artifactSha256 !== undefined && now.artifactSha256 !== opts.artifactSha256) throw new HttpError(409, BUNDLE_CHANGED, "bundle_changed");
+    throw new HttpError(409, `Submission is ${now.status}, not waiting for review`, "conflict");
+  }
+  await audit({ kind: "admin", id: reviewerId }, "submission.approve", { kind: "submission", id }, { slug: sub.slug, version: sub.version, selfReview }, request);
+}
+
+/** A reviewer's decision on a text change; an approval is refused for the reviewer's own work as above. */
+export async function decideTextChangeAsReviewer(id: string, approve: boolean, reviewerId: string, notes: string | null, request?: Request, opts: { selfReview?: boolean } = {}) {
+  const tc = db.select().from(textChanges).where(eq(textChanges.id, id)).get();
+  if (!tc) throw new HttpError(404, "Change not found", "not_found");
+  const selfReview = approve ? await assertMayApprove(reviewerId, tc.proposedBy, tc.extensionId, opts.selfReview === true) : false;
+  await decideTextChange(id, approve, reviewerId, notes, request);
+  if (selfReview) await audit({ kind: "admin", id: reviewerId }, "text_change.self_review", { kind: "text_change", id }, { field: tc.field }, request);
 }
 
 export async function rejectSubmission(id: string, reviewerId: string, notes: string, request?: Request) {

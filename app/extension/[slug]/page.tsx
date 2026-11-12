@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { BadgeCheck, Download } from "lucide-react";
 import { getExtensionBySlug } from "@/lib/db/queries";
-import { PermissionList } from "@/components/permission-badge";
+import { GrantList, PermissionList } from "@/components/permission-badge";
+import { grantOf } from "@/lib/webmail-compat";
 import { ExtIcon, formatTypeLabel } from "@/components/ext-icon";
 import { ICON } from "@/components/icon";
 import { formatDownloads, formatDate, formatBytes, timeAgo } from "@/lib/utils";
@@ -317,7 +318,11 @@ export default async function ExtensionDetailPage({ params }: Props) {
 
             <section>
               <h2 className="dx-h2">Permissions</h2>
-              <PermissionList permissions={extension.permissions ?? []} isTheme={!isPlugin} />
+              {latestVersion ? (
+                <GrantList grant={grantOf(latestVersion.manifest)} isTheme={!isPlugin} />
+              ) : (
+                <PermissionList permissions={extension.permissions ?? []} isTheme={!isPlugin} />
+              )}
             </section>
 
             {extension.tags && extension.tags.length > 0 ? (

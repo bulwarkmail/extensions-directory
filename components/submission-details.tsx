@@ -5,6 +5,8 @@ import { source } from "@/lib/sources";
 import { formatBytes, timeAgo } from "@/lib/utils";
 import { Status } from "@/components/status";
 import { ScanFindings, type ScanFinding } from "@/components/scan-findings";
+import { GrantList } from "@/components/permission-badge";
+import { grantOf } from "@/lib/webmail-compat";
 
 type Submission = typeof submissions.$inferSelect;
 
@@ -22,9 +24,22 @@ interface Diff {
   unchanged: number;
   permissionsAdded: string[];
   permissionsRemoved: string[];
+  // Missing in diffs stored before optional permissions were counted.
+  optionalPermissionsAdded?: string[];
+  keystoreAdded?: boolean;
   originsAdded: Record<string, string[]>;
+  // Missing in diffs stored before credential bindings were counted.
+  credentialsChanged?: { credential: string; before: string | null; after: string }[];
+  formerSecrets?: string[];
   tierChanged: { from: string | null; to: string | null } | null;
 }
+
+const ORIGIN_LINES: Record<string, string> = {
+  httpOrigins: "New servers it may contact (httpOrigins)",
+  apiPostPaths: "New webmail routes it may call in the user's name (apiPostPaths)",
+  frameOrigins: "New sites it may show inside the webmail (frameOrigins)",
+  credentials: "New servers its stored credentials are sent to (credentials, through http:proxy)",
+};
 
 /** What the author and the reviewer both see about a submission. */
 export function SubmissionDetails({ s }: { s: Submission }) {
@@ -40,6 +55,8 @@ export function SubmissionDetails({ s }: { s: Submission }) {
   }
   const findings = scan?.findings ?? [];
   const media = s.media ?? null;
+  const grant = s.manifestSnapshot ? grantOf(s.manifestSnapshot) : null;
+  const isTheme = s.manifestSnapshot?.type === "theme";
   return (
     <div className="dx-stack">
       <dl className="bw-deflist">
@@ -69,6 +86,18 @@ export function SubmissionDetails({ s }: { s: Submission }) {
         </section>
       ) : null}
 
+      {grant ? (
+        <section>
+          <h3 className="bw-h3">What a webmail grants this version</h3>
+          <p className="bw-help">Its permissions with the optional ones, its tier, and where it may send data, as the webmail reads them from manifest.json.</p>
+          {!grant.checked ? <p className="bw-note bw-note-warning">The webmail check refuses this manifest; the list shows everything it asks for.</p> : null}
+          {grant.unknownOptionalPermissions.length ? (
+            <p className="bw-note bw-note-warning">Optional permissions this webmail doesn&apos;t know, left out now and granted by a newer webmail that offers them: {grant.unknownOptionalPermissions.join(", ")}</p>
+          ) : null}
+          <GrantList grant={grant} isTheme={isTheme} />
+        </section>
+      ) : null}
+
       {scan ? (
         <section>
           <h3 className="bw-h3">Code scan</h3>
@@ -79,9 +108,27 @@ export function SubmissionDetails({ s }: { s: Submission }) {
       {diff ? (
         <section>
           <h3 className="bw-h3">Changes {diff.previousVersion ? `since ${diff.previousVersion}` : "(first version)"}</h3>
+          {diff.tierChanged && diff.tierChanged.from === null && diff.tierChanged.to === "privileged" ? (
+            <p className="bw-note bw-note-warning"><strong>Privileged tier.</strong> It runs in a frame on the webmail&apos;s own origin, with the webmail&apos;s own storage and cryptography, instead of the closed sandbox.</p>
+          ) : diff.tierChanged ? <p className="bw-note bw-note-warning">Tier changes from {diff.tierChanged.from ?? "untrusted"} to {diff.tierChanged.to ?? "untrusted"}</p> : null}
+          {diff.keystoreAdded ? (
+            <p className="bw-note bw-note-warning">
+              <strong>This version newly asks for keystore.</strong> It can ask to sign and decrypt with the certificates and smart cards on each user&apos;s computer. Check why it needs that, and that it only uses api.keystore.
+            </p>
+          ) : null}
           {diff.permissionsAdded.length ? <p className="bw-note bw-note-warning">New permissions: {diff.permissionsAdded.join(", ")}</p> : null}
-          {Object.entries(diff.originsAdded).map(([k, v]) => <p key={k} className="bw-note bw-note-warning">New {k}: {v.join(", ")}</p>)}
-          {diff.tierChanged ? <p className="bw-note bw-note-warning">Tier changes from {diff.tierChanged.from ?? "untrusted"} to {diff.tierChanged.to ?? "untrusted"}</p> : null}
+          {diff.optionalPermissionsAdded?.length ? <p className="bw-note bw-note-warning">New optional permissions, granted like the others: {diff.optionalPermissionsAdded.join(", ")}</p> : null}
+          {Object.entries(diff.originsAdded).map(([k, v]) => <p key={k} className="bw-note bw-note-warning">{ORIGIN_LINES[k] ?? `New ${k}`}: {v.join(", ")}</p>)}
+          {diff.credentialsChanged?.map((c) => (
+            <p key={`cred-${c.credential}`} className="bw-note bw-note-warning">
+              {c.before ? `Credential "${c.credential}": now ${c.after}; before, ${c.before}.` : `New credential "${c.credential}": ${c.after}.`}
+            </p>
+          ))}
+          {diff.formerSecrets?.length ? (
+            <p className="bw-note bw-note-warning">
+              {`Settings no longer secret: ${diff.formerSecrets.map((k) => `"${k}"`).join(", ")}. What is entered there from now on can be read by every signed-in user and by the plugin itself.`}
+            </p>
+          ) : null}
           {diff.permissionsRemoved.length ? <p>Permissions no longer requested: {diff.permissionsRemoved.join(", ")}</p> : null}
           <p>{diff.added.length} added, {diff.changed.length} changed, {diff.removed.length} removed, {diff.unchanged} unchanged files.</p>
         </section>

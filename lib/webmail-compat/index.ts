@@ -30,10 +30,13 @@ export const LIMITS = {
 
 /** Same rules as the webmail's consent dialog (lib/plugin-sandbox/permission-text.ts). */
 export const HIGH_RISK_PERMISSIONS: ReadonlySet<string> = new Set([
-  "crypto:full", "email:read", "email:send", "email:raw-send", "email:forward", "email:blob-read",
-  "email:blob-write", "email:render-takeover", "http:fetch", "http:post",
+  "crypto:full", "keystore", "email:read", "email:send", "email:raw-send", "email:forward", "email:blob-read",
+  "email:blob-write", "email:render-takeover", "http:fetch", "http:post", "links:check",
   "filters:write", "http:proxy", "compose:check", "identity:write", "vacation:write",
+  "calendar:respond", "settings:change",
 ]);
+
+export { credentialTarget, grantOf, type CredentialGrant, type Grant, type Tier } from "./grants";
 
 export function permissionKey(perm: string): string {
   return perm.replace(/[:-]/g, "_");

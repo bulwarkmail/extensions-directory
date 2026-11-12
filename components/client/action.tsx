@@ -7,8 +7,8 @@ import { api } from "./api";
 type Method = "POST" | "PATCH" | "DELETE";
 
 /**
- * A button that calls one v2 endpoint and refreshes the page. With `ask`,
- * it asks for a reason (or notes) first; with `confirm`, it asks to confirm.
+ * A button that calls one v2 endpoint and refreshes the page. With `confirm`,
+ * it asks to confirm first; with `ask`, it then asks for a reason (or notes).
  */
 export function ActionButton({
   method = "POST",
@@ -43,13 +43,12 @@ export function ActionButton({
 
   async function run() {
     let payload = body;
+    if (confirm && !window.confirm(confirm)) return;
     if (ask) {
       const answer = window.prompt(ask);
       if (answer === null) return;
       if (askRequired && !answer.trim()) return;
       payload = { ...body, [askField]: answer };
-    } else if (confirm && !window.confirm(confirm)) {
-      return;
     }
     setBusy(true);
     setError(null);

@@ -1,8 +1,11 @@
 // Data steps after the SQL migrations, bundled to deploy/dist/post-migrate.cjs
 // by `npm run build:scripts` and called by deploy/migrate.cjs:
-//   1. latest-version caches (SQLite can't order semver),
-//   2. re-encode images stored before lib/images.ts,
-//   3. check the data against the files (report only).
+//   1. each version's stored permissions, as the vendored webmail check
+//      grants them from its manifest (optional permissions included),
+//   2. latest-version caches (SQLite can't order semver), which copy the
+//      latest stable version's permissions to the extension,
+//   3. re-encode images stored before lib/images.ts,
+//   4. check the data against the files (report only).
 // Every step is idempotent. By hand:
 //
 //   DATABASE_PATH=... UPLOADS_DIR=... node deploy/dist/post-migrate.cjs [--dry-run]
@@ -10,8 +13,11 @@ import Database from "better-sqlite3";
 import { refreshLatest } from "../lib/release-caches";
 import { reencodeStoredMedia } from "../lib/reencode-media";
 import { verifyData } from "../lib/verify-data";
+import { rederiveStoredPermissions } from "../lib/webmail-compat/grants";
 
 export async function run(sqlite: Database.Database, uploadsDir: string, dryRun = false): Promise<{ problems: string[] }> {
+  const permissions = rederiveStoredPermissions(sqlite, dryRun);
+  console.log(`permissions: ${dryRun ? "would update" : "updated"} ${permissions} versions from their manifest`);
   const hasColumn = (sqlite.prepare("pragma table_info(extensions)").all() as { name: string }[]).some((c) => c.name === "latest_stable_version_id");
   if (hasColumn && !dryRun) console.log(`caches: refreshed ${refreshLatest(sqlite)} extensions`);
 
