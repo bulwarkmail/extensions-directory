@@ -17,16 +17,18 @@ describe("checkedSvg refuses", () => {
     ["an xml-stylesheet instruction", `<?xml version="1.0"?><?xml-stylesheet type="text/css" href="#s"?>${svg("")}`, /processing instructions/],
     ["another processing instruction", svg("<?php echo 1 ?>"), /processing instructions/],
     ["an XML declaration after a comment", `<!-- c --><?xml version="1.0"?>${svg("")}`, /processing instructions/],
-    ["an XInclude", svg(`<xi:include href="${DATA}" parse="xml"/>`, 'xmlns:xi="http://www.w3.org/2001/XInclude"'), /only SVG elements/],
-    ["an element of another namespace", svg('<x:thing xmlns:x="urn:x"/>'), /only SVG elements/],
-    ["a default namespace switched inside", svg('<g xmlns="urn:x"><rect/></g>'), /only SVG elements/],
-    ["foreignObject", svg("<foreignObject/>"), /<foreignObject> is not allowed/],
+    ["an XInclude", svg(`<xi:include href="${DATA}" parse="xml"/>`, 'xmlns:xi="http://www.w3.org/2001/XInclude"'), /must not include other files \(XInclude\)/],
+    ["an XInclude inside metadata", svg(`<metadata><xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="${DATA}"/></metadata>`), /XInclude/],
+    ["foreignObject", svg("<foreignObject/>"), /<foreignObject> element .*remove it/],
+    ["a switch with a foreignObject branch", svg('<switch><foreignObject requiredExtensions="x"/><g><rect/></g></switch>'), /<switch>.*Export As > SVG/],
     ["a script", svg("<script>1</script>"), /scripts/],
     ["an event handler", svg('<rect onclick="1"/>'), /scripts/],
-    ["an embedded raster image", svg('<image href="data:image/png;base64,iVBORw0KGgo="/>'), /<image> is not allowed/],
-    ["a style element", svg("<style>rect{fill:red}</style>"), /<style> is not allowed/],
-    ["a nested svg", svg(`<svg ${NS}/>`), /<svg> is not allowed/],
-    ["a root other than svg", `<rect ${NS}/>`, /<rect> is not allowed/],
+    ["an embedded raster image", svg('<image href="data:image/png;base64,iVBORw0KGgo="/>'), /<image> element: embedded or linked images aren't accepted/],
+    ["a style element", svg("<style>rect{fill:red}</style>"), /<style> element.*Styling "Presentation Attributes"/],
+    ["a nested svg", svg(`<svg ${NS}/>`), /<svg> element inside the drawing.*<g> group/],
+    ["a root other than svg", `<rect ${NS}/>`, /Not an SVG image/],
+    ["a root in another namespace", '<svg xmlns="urn:x"/>', /Not an SVG image/],
+    ["an element not on the list", svg('<pattern id="p"/>'), /<pattern> isn't accepted: icons, banners and screenshots may use/],
     ["a use of a data: URL", svg(`<use href="${DATA}#r"/>`), /external/],
     ["a use of another file", svg('<use xlink:href="other.svg#r"/>', XLINK), /external/],
     ["a gradient href to another file", svg('<linearGradient id="g" href="https://example.invalid/g.svg#g"/>'), /external/],
@@ -42,6 +44,10 @@ describe("checkedSvg refuses", () => {
     ["a url() to a data: URL in a style", svg(`<rect style="fill:url(${DATA}#g)"/>`), /external/],
     ["a style declaration without a value", svg('<rect style="fill"/>'), /not readable/],
     ["a quote left open in a style", svg(`<rect style="font-family:'a;fill:red"/>`), /not readable/],
+    ["a CSS filter function", svg('<rect filter="blur(2px)"/>'), /filter functions/],
+    ["a CSS filter function in a style", svg('<rect style="filter:drop-shadow(1px 1px 0 #000)"/>'), /filter functions/],
+    ["a filter function after a reference", svg('<filter id="f"><feFlood/></filter><rect filter="url(#f) blur(1px)"/>'), /filter functions/],
+    ["a filter inherited from the parent", svg('<filter id="f"><feFlood/></filter><g filter="url(#f)"><rect filter="inherit"/></g>'), /filter functions/],
   ])("%s", (_name, text, why) => {
     expect(reason(text)).toMatch(why);
   });
@@ -101,7 +107,20 @@ describe("checkedSvg writes out what it checked", () => {
       ok: true,
       svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10"><rect width="10"/></svg>',
     });
-    expect(reason('<svg width="10"><g xmlns="urn:x"/></svg>')).toMatch(/only SVG elements/);
+    // An element of a declared namespace is still not SVG: it is left out.
+    expect(reason('<svg width="10"><g xmlns="urn:x"><rect width="10"/></g></svg>')).toBe('drawn: <svg xmlns="http://www.w3.org/2000/svg" width="10"/>');
+  });
+
+  it.each([
+    ["an element of another namespace", '<x:thing xmlns:x="urn:x"/>'],
+    ["a default namespace switched inside", '<g xmlns="urn:x"><rect/></g>'],
+    ["metadata with RDF", '<metadata><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description/></rdf:RDF></metadata>'],
+    ["an SVG rect inside an element of another namespace", '<x:wrap xmlns:x="urn:x"><rect width="16" height="12" fill="red"/></x:wrap>'],
+    ["a prefixed SVG rect inside an element of another namespace", `<x:wrap xmlns:x="urn:x" xmlns:s="http://www.w3.org/2000/svg"><s:rect width="16" height="12" fill="red"/></x:wrap>`],
+    ["an SVG group switching back to SVG inside another namespace", `<x:wrap xmlns:x="urn:x"><g xmlns="http://www.w3.org/2000/svg"><rect fill="red"/></g></x:wrap>`],
+    ["a script, style and image inside metadata", "<metadata><script>1</script><style>rect{fill:red}</style><image/></metadata>"],
+  ])("leaves out %s, with everything inside it", (_name, inner) => {
+    expect(checkedSvg(svg(`${inner}<circle r="1"/>`))).toMatchObject({ ok: true, svg: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="12"><circle r="1"/></svg>` });
   });
 
   it("keeps a prefixed SVG root and writes it without the prefix", () => {

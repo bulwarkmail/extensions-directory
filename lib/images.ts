@@ -92,7 +92,7 @@ function refusedFormat(bytes: Buffer): string | null {
 // the bytes are not SVG text.
 function svgText(bytes: Buffer): string | null {
   if (startsWith(bytes, 0, [0xfe, 0xff]) || startsWith(bytes, 0, [0xff, 0xfe]) || startsWith(bytes, 0, [0, 0, 0xfe, 0xff])) {
-    throw new ImageError("SVG must be UTF-8 text");
+    throw new ImageError(NOT_UTF8);
   }
   let text: string;
   try {
@@ -104,13 +104,17 @@ function svgText(bytes: Buffer): string | null {
   // Whether it is an SVG is for the parser to say: the root may come after
   // comments of any length.
   if (!text.startsWith("<")) return null;
-  if (text.includes("\0")) throw new ImageError("SVG must be UTF-8 text");
+  if (text.includes("\0")) throw new ImageError(NOT_UTF8);
   for (const [decl] of text.matchAll(/<\?xml\b[^>]*/gi)) {
     const encoding = /\bencoding\s*=\s*["']?([^"'\s?>]*)/i.exec(decl);
-    if (encoding && !/^utf-?8$/i.test(encoding[1])) throw new ImageError("SVG must be UTF-8 text");
+    if (encoding && !/^utf-?8$/i.test(encoding[1])) throw new ImageError(NOT_UTF8);
   }
   return text;
 }
+
+// What the author reads on the submission (after "icon: ", "banner: ", ...).
+const NOT_UTF8 = "SVG must be UTF-8 text: save the file with UTF-8 encoding";
+const NOT_READABLE = "Not a readable image: the file is damaged or in another format; use PNG, JPEG, WebP, GIF or SVG";
 
 /**
  * Address space of the decoder child on Linux, where the worker runs. Node
@@ -209,7 +213,7 @@ function hashOf(data: Buffer): string {
 export async function encodeImage(input: Buffer, kind: ImageKind): Promise<EncodedImage> {
   if (input.length === 0) throw new ImageError("Image is empty");
   if (input.length > MAX_INPUT_BYTES[kind]) {
-    throw new ImageError(`Image is ${Math.ceil(input.length / 1024)} KB; at most ${MAX_INPUT_BYTES[kind] / 1024} KB is allowed`);
+    throw new ImageError(`Image is ${Math.ceil(input.length / 1024)} KB; at most ${MAX_INPUT_BYTES[kind] / 1024} KB is allowed: compress it or make it smaller`);
   }
   let format: Format | null = rasterFormat(input);
   let bytes = input;
@@ -218,7 +222,8 @@ export async function encodeImage(input: Buffer, kind: ImageKind): Promise<Encod
     const text = svgText(input);
     if (text === null) {
       const name = refusedFormat(input);
-      throw new ImageError(name ? `Unsupported image type ${name}; use PNG, JPEG, WebP, GIF or SVG` : "Not a readable image");
+      if (!name) throw new ImageError(NOT_READABLE);
+      throw new ImageError(`Unsupported image type ${name}; use PNG, JPEG, WebP, GIF or SVG${name === "gzip" ? " (save a compressed .svgz as plain .svg)" : ""}`);
     }
     const checked = checkedSvg(text);
     if (!checked.ok) throw new ImageError(checked.reason);
@@ -233,17 +238,17 @@ export async function encodeImage(input: Buffer, kind: ImageKind): Promise<Encod
   try {
     meta = await open().metadata();
   } catch {
-    throw new ImageError("Not a readable image");
+    throw new ImageError(NOT_READABLE);
   }
-  if (meta.format !== format) throw new ImageError("Not a readable image");
+  if (meta.format !== format) throw new ImageError(NOT_READABLE);
   if (format === "svg" && ((meta.width ?? 0) > MAX_SVG_SIDE || (meta.height ?? 0) > MAX_SVG_SIDE)) {
-    throw new ImageError(`SVG is larger than ${MAX_SVG_SIDE} px on a side`);
+    throw new ImageError(`SVG is larger than ${MAX_SVG_SIDE} px on a side: set a smaller width and height`);
   }
   // The size librsvg reports here is the canvas it will draw on, before any drawing.
   if (filtered && (meta.width ?? 0) * (meta.height ?? 0) > MAX_FILTERED_SVG_PIXELS) {
-    throw new ImageError("An SVG with filters may cover at most 2048 x 2048 px");
+    throw new ImageError("An SVG with filters may cover at most 2048 x 2048 px: set a smaller width and height, or leave out the filter");
   }
-  if ((meta.width ?? 0) * (meta.height ?? 0) > MAX_PIXELS) throw new ImageError("Image has too many pixels");
+  if ((meta.width ?? 0) * (meta.height ?? 0) > MAX_PIXELS) throw new ImageError("Image has more than 25 megapixels: send a smaller image");
 
   // rotate() applies the EXIF orientation before the metadata is dropped;
   // sharp writes no metadata unless asked to.

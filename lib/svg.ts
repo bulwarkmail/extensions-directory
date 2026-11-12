@@ -5,12 +5,18 @@
 // attributes that plain icons, banners and screenshots use. The file is
 // refused when it holds anything that could make librsvg read a second
 // document, run CSS or draw something not checked here: a DOCTYPE or
-// entity, a processing instruction other than the XML declaration, an
-// element outside the SVG namespace (XInclude among them), an element not on
-// the list (<style>, <script>, <image>, <foreignObject>, ...), an event
-// handler, an href or url() that is not a same-document #id, and a CSS
-// escape, comment, at-rule or block in an attribute or style declaration.
-// Attributes and style properties not on the list are left out.
+// entity, a processing instruction other than the XML declaration, XInclude,
+// an SVG element not on the list (<style>, <script>, <image>,
+// <foreignObject>, <switch>, ...), an event handler, an href or url() that
+// is not a same-document #id, a filter that is not a <filter> element, and a
+// CSS escape, comment, at-rule or block in an attribute or style
+// declaration. Each refusal says what the author can change.
+//
+// What draws nothing is left out and the rest goes on: <metadata>, every
+// element in another namespace (what drawing programs save for themselves,
+// such as sodipodi:namedview or Illustrator's i:pgf) with everything inside
+// it, SVG elements included, attributes of other namespaces, and attributes
+// and style properties not on the list.
 //
 // The tree is also held to limits on what drawing it costs: the number of
 // elements, of filter primitives per filter, of shapes drawn once use,
@@ -26,6 +32,7 @@ export type CheckedSvg = { ok: true; svg: string; filtered: boolean } | { ok: fa
 const SVG_NS = "http://www.w3.org/2000/svg";
 const XLINK_NS = "http://www.w3.org/1999/xlink";
 const XML_NS = "http://www.w3.org/XML/1998/namespace";
+const XINCLUDE_NS = "http://www.w3.org/2001/XInclude";
 
 /** Elements a drawing may hold; svg only as the root. */
 const ELEMENTS = new Set([
@@ -66,6 +73,12 @@ const ID = "[A-Za-z0-9_.:-]+";
 const HREF = new RegExp(`^#${ID}$`);
 /** url(#id), optionally quoted, with an optional plain fallback paint. */
 const URL_REFERENCE = new RegExp(`^url\\(\\s*(['"]?)#${ID}\\1\\s*\\)(\\s+[#\\w.%-]+)?$`);
+/**
+ * The filter property: a <filter> element of the document, or none. librsvg
+ * also runs CSS filter functions (blur(), drop-shadow(), ...), which the
+ * limits on filter steps below would not see.
+ */
+const FILTER_VALUE = new RegExp(`^(none|url\\(\\s*(['"]?)#${ID}\\2\\s*\\))$`);
 /** What starts a CSS escape, comment, at-rule, block or !important, or markup. */
 const NOT_PLAIN = /[\\@{}<!]|\/\*/;
 /** Characters XML doesn't allow: control characters but tab and line breaks, U+FFFE, U+FFFF. */
@@ -83,7 +96,44 @@ export const MAX_DRAWN = 10_000;
 /** Filter primitives run, counting each filtered shape once per primitive of its filter. */
 export const MAX_FILTER_RUNS = 64;
 
-const MALFORMED = "SVG is not well-formed XML";
+// What the author reads on the submission (after "icon: ", "banner: ", ...).
+const MALFORMED = "SVG is not well-formed XML: check that every tag is closed and every attribute value is quoted";
+const NOT_SVG = "Not an SVG image: the file needs an <svg> root element in the SVG namespace";
+const DOCTYPE = "SVG must not contain a DOCTYPE or entities: delete the <!DOCTYPE ...> part (Illustrator's Save As > SVG writes one, Export As > SVG doesn't)";
+const PROCESSING_INSTRUCTION = "SVG must not contain processing instructions such as <?xml-stylesheet?>: delete them and put the styles on the elements";
+const XINCLUDE = "SVG must not include other files (XInclude): put their content into the file itself";
+const SCRIPTS = "SVG must not contain scripts: remove <script> elements and event attributes such as onclick";
+const LINK = 'SVG must not reference external files: a link (href) may only point to an element of the same file, as href="#id"';
+const URL_OUTSIDE = "SVG must not reference external files: url() may only point to a gradient, clip path, mask or filter of the same file, as url(#id)";
+const FILTER_FUNCTION = "SVG filters must be url(#id) references to a <filter> element; CSS filter functions such as blur() aren't accepted";
+const ESCAPES = "SVG attribute values must not hold CSS escapes, comments or rules: write plain values, without backslashes, /* */, @, { } or !important";
+const STYLE_ESCAPES = "SVG style must not hold CSS escapes, comments or rules: write plain property:value pairs, without backslashes, /* */, @, { } or !important";
+const STYLE_UNREADABLE = "SVG style is not readable: write it as property:value pairs separated by semicolons";
+const TOO_MANY_DRAWN = `SVG draws more than ${MAX_DRAWN} shapes once its references are followed: use fewer <use>, clip-path and mask copies, or send a PNG or WebP`;
+const TOO_MANY_FILTER_RUNS = `SVG runs more than ${MAX_FILTER_RUNS} filter steps: apply filters to fewer shapes, or send a PNG or WebP`;
+
+/** Why an SVG element is refused, and what to do instead. */
+function notAccepted(element: string): string {
+  switch (element) {
+    case "style":
+      return (
+        "SVG has a <style> element, which isn't accepted: export the styles as presentation attributes " +
+        '(Illustrator: Export As > SVG, Styling "Presentation Attributes"), or move the CSS rules onto the elements, ' +
+        "for example with SVGO's inlineStyles plugin"
+      );
+    case "image":
+    case "feImage":
+      return `SVG has an <${element}> element: embedded or linked images aren't accepted in an SVG. Send the picture as a PNG, JPEG or WebP file, or turn it into paths`;
+    case "foreignObject":
+      return "SVG has a <foreignObject> element (HTML inside the drawing), which isn't accepted: remove it";
+    case "switch":
+      return 'SVG has a <switch> element, which isn\'t accepted: in Illustrator, use Export As > SVG instead of Save As, or turn off "Preserve Illustrator Editing Capabilities"';
+    case "svg":
+      return "SVG has an <svg> element inside the drawing, which isn't accepted: put the inner drawing in a <g> group instead";
+    default:
+      return `SVG element <${element}> isn't accepted: icons, banners and screenshots may use shapes, paths, text, gradients, clip paths, masks, <use> and <filter> elements`;
+  }
+}
 
 class Refusal extends Error {}
 
@@ -94,7 +144,8 @@ interface SvgNode {
 }
 
 interface Frame {
-  node: SvgNode;
+  /** null for an element left out with everything inside it. */
+  node: SvgNode | null;
   /** The tag name as written, for matching its end tag. */
   rawName: string;
   /** Namespace prefixes in scope ("" for the default namespace). */
@@ -140,15 +191,17 @@ function qualifiedName(name: string): [string, string] {
 
 /** An attribute or property value that may be drawn as it is. */
 function checkValue(name: string, value: string): void {
-  if (NOT_PLAIN.test(value)) throw new Refusal("SVG attribute values must not hold CSS escapes, comments or rules");
-  if (/url\s*\(/i.test(value) && !(REFERENCES.has(name) && URL_REFERENCE.test(value.trim()))) {
-    throw new Refusal("SVG must not reference external files");
+  if (NOT_PLAIN.test(value)) throw new Refusal(ESCAPES);
+  // A filter value that points at another file gets the message about files below.
+  if (name === "filter" && !FILTER_VALUE.test(value.trim()) && !/url\s*\(\s*['"]?(?!#)/i.test(value)) {
+    throw new Refusal(FILTER_FUNCTION);
   }
+  if (/url\s*\(/i.test(value) && !(REFERENCES.has(name) && URL_REFERENCE.test(value.trim()))) throw new Refusal(URL_OUTSIDE);
 }
 
 /** A style attribute reduced to the listed properties, each checked like an attribute. */
 function checkedStyle(value: string): string {
-  if (NOT_PLAIN.test(value)) throw new Refusal("SVG style must not hold CSS escapes, comments or rules");
+  if (NOT_PLAIN.test(value)) throw new Refusal(STYLE_ESCAPES);
   const out: string[] = [];
   for (const declaration of value.split(";")) {
     if (!declaration.trim()) continue;
@@ -157,7 +210,7 @@ function checkedStyle(value: string): string {
     const propertyValue = declaration.slice(colon + 1).trim();
     // A quote left open would have hidden a ";" from the split above.
     if (colon < 0 || !/^-?[a-z][a-z-]*$/.test(property) || !propertyValue || (propertyValue.match(/["']/g)?.length ?? 0) % 2) {
-      throw new Refusal("SVG style is not readable");
+      throw new Refusal(STYLE_UNREADABLE);
     }
     if (!PROPERTIES.has(property)) continue;
     checkValue(property, propertyValue);
@@ -183,10 +236,10 @@ function checkedAttributes(element: string, raw: [string, string][], namespaces:
       else if (ns === XML_NS && local === "space" && (value === "default" || value === "preserve")) name = "xml:space";
       else continue;
     }
-    if (/^on/i.test(name)) throw new Refusal("SVG must not contain scripts");
+    if (/^on/i.test(name)) throw new Refusal(SCRIPTS);
     let drawn = value;
     if (name === "href") {
-      if (!HREF.test(value)) throw new Refusal("SVG must not reference external files");
+      if (!HREF.test(value)) throw new Refusal(LINK);
       if (!LINKING.has(element)) continue;
     } else if (name === "style") {
       drawn = checkedStyle(value);
@@ -251,6 +304,7 @@ function parse(text: string): SvgNode {
       if (/[^\t\n\r ]/.test(value)) throw new Refusal(MALFORMED);
       return;
     }
+    if (!top.node) return;
     const children = top.node.children;
     const last = children[children.length - 1];
     if (typeof last === "string") children[children.length - 1] = last + value;
@@ -276,8 +330,8 @@ function parse(text: string): SvgNode {
           started = true;
           return;
         }
-        if (name.startsWith("!")) throw new Refusal("SVG must not contain a DOCTYPE or entities");
-        throw new Refusal("SVG must not contain processing instructions");
+        if (name.startsWith("!")) throw new Refusal(DOCTYPE);
+        throw new Refusal(PROCESSING_INSTRUCTION);
       },
       oncomment() {
         flush();
@@ -308,7 +362,7 @@ function parse(text: string): SvgNode {
       },
       onopentag(rawName: string) {
         if (rootClosed) throw new Refusal(MALFORMED);
-        if (stack.length >= MAX_DEPTH) throw new Refusal("SVG is nested too deeply");
+        if (stack.length >= MAX_DEPTH) throw new Refusal(`SVG is nested too deeply (more than ${MAX_DEPTH} levels): ungroup some of its groups`);
         const parent = stack[stack.length - 1];
         let namespaces = parent?.namespaces ?? new Map<string, string>();
         let ownScope = !parent;
@@ -328,11 +382,19 @@ function parse(text: string): SvgNode {
         if (!parent) withoutNamespace = !prefix && !namespaces.has("");
         const ns = namespaces.get(prefix) ?? (!prefix && withoutNamespace ? SVG_NS : undefined);
         if (prefix && ns === undefined) throw new Refusal(MALFORMED);
-        if (ns !== SVG_NS) throw new Refusal(parent ? "SVG must contain only SVG elements" : "Not an SVG image");
-        if (local === "script") throw new Refusal("SVG must not contain scripts");
-        if (!ELEMENTS.has(local) || (local === "svg") !== !parent) throw new Refusal(`SVG element <${local}> is not allowed`);
+        if (!parent && (ns !== SVG_NS || local !== "svg")) throw new Refusal(NOT_SVG);
+        if (ns === XINCLUDE_NS) throw new Refusal(XINCLUDE);
+        // Left out with everything inside it: what a drawing program keeps for
+        // itself (another namespace) and metadata. librsvg draws none of it, and
+        // nothing inside it reaches the tree that is drawn.
+        if (parent && (!parent.node || ns !== SVG_NS || local === "metadata")) {
+          stack.push({ node: null, rawName, namespaces });
+          return;
+        }
+        if (local === "script") throw new Refusal(SCRIPTS);
+        if (!ELEMENTS.has(local) || (parent && local === "svg")) throw new Refusal(notAccepted(local));
         const node: SvgNode = { name: local, attributes: checkedAttributes(local, tag.attributes, namespaces), children: [] };
-        if (parent) parent.node.children.push(node);
+        if (parent?.node) parent.node.children.push(node);
         else root = node;
         stack.push({ node, rawName, namespaces });
       },
@@ -349,7 +411,7 @@ function parse(text: string): SvgNode {
   );
   parser.end(text);
   flush();
-  if (!root) throw new Refusal("Not an SVG image");
+  if (!root) throw new Refusal(NOT_SVG);
   if (stack.length > 0) throw new Refusal(MALFORMED);
   return root;
 }
@@ -388,11 +450,11 @@ function measure(root: SvgNode): boolean {
   const byId = new Map<string, SvgNode>();
   let elements = 0;
   const index = (node: SvgNode) => {
-    if (++elements > MAX_ELEMENTS) throw new Refusal(`SVG has more than ${MAX_ELEMENTS} elements`);
+    if (++elements > MAX_ELEMENTS) throw new Refusal(`SVG has more than ${MAX_ELEMENTS} elements: simplify the drawing (for example with SVGO) or send a PNG or WebP`);
     const id = node.attributes.find(([name]) => name === "id")?.[1];
     if (id !== undefined && !byId.has(id)) byId.set(id, node);
     if (node.name === "filter" && filterPrimitives(node) > MAX_FILTER_PRIMITIVES) {
-      throw new Refusal(`SVG filter has more than ${MAX_FILTER_PRIMITIVES} steps`);
+      throw new Refusal(`SVG filter has more than ${MAX_FILTER_PRIMITIVES} steps: simplify the effect or send a PNG or WebP`);
     }
     for (const child of node.children) if (typeof child !== "string") index(child);
   };
@@ -406,7 +468,7 @@ function measure(root: SvgNode): boolean {
   const cost = (node: SvgNode): { drawn: number; filterRuns: number } => {
     const done = known.get(node);
     if (done) return done;
-    if (open.has(node)) throw new Refusal("SVG references form a loop");
+    if (open.has(node)) throw new Refusal("SVG references form a loop: an element points back at itself through <use>, clip-path or mask");
     open.add(node);
     let drawn = 1;
     let filterRuns = 0;
@@ -421,10 +483,10 @@ function measure(root: SvgNode): boolean {
       const c = cost(part);
       drawn += c.drawn;
       filterRuns += c.filterRuns;
-      if (drawn > MAX_DRAWN) throw new Refusal(`SVG draws more than ${MAX_DRAWN} shapes once its references are followed`);
-      if (filterRuns > MAX_FILTER_RUNS) throw new Refusal(`SVG runs more than ${MAX_FILTER_RUNS} filter steps`);
+      if (drawn > MAX_DRAWN) throw new Refusal(TOO_MANY_DRAWN);
+      if (filterRuns > MAX_FILTER_RUNS) throw new Refusal(TOO_MANY_FILTER_RUNS);
     }
-    if (filterRuns > MAX_FILTER_RUNS) throw new Refusal(`SVG runs more than ${MAX_FILTER_RUNS} filter steps`);
+    if (filterRuns > MAX_FILTER_RUNS) throw new Refusal(TOO_MANY_FILTER_RUNS);
     open.delete(node);
     const result = { drawn, filterRuns };
     known.set(node, result);

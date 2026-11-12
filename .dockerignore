@@ -2,16 +2,18 @@
 # project into the standalone server, so anything left in the build context
 # can end up in the image. Leave out secrets, local data, installed packages
 # and build or test output; the build installs and builds its own.
+# Secrets and databases are left out at any depth (no tracked folder is
+# named keys, no tracked file is a .pem, .env or database but .env.example).
 .git
-.env
-.env.*
-!.env.example
-keys/
-*.pem
+**/.env
+**/.env.*
+!**/.env.example
+**/keys
+**/*.pem
 data/
-*.db
-*.db-shm
-*.db-wal
+**/*.db
+**/*.db-shm
+**/*.db-wal
 node_modules
 .next
 out

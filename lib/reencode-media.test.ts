@@ -50,10 +50,10 @@ describe("reencodeStoredMedia", () => {
     expect(report.dropped).toHaveLength(4);
     expect(report.dropped).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ table: "extensions", id: "ext-nord", reason: "SVG must not contain scripts" }),
-        expect.objectContaining({ table: "extensions", id: "ext-jitsi", reason: "SVG must not contain scripts" }),
-        expect.objectContaining({ id: "shot-2", reason: "SVG must not contain scripts" }),
-        expect.objectContaining({ id: "shot-broken", reason: "Not a readable image" }),
+        expect.objectContaining({ table: "extensions", id: "ext-nord", reason: expect.stringMatching(/^SVG must not contain scripts/) }),
+        expect.objectContaining({ table: "extensions", id: "ext-jitsi", reason: expect.stringMatching(/^SVG must not contain scripts/) }),
+        expect.objectContaining({ id: "shot-2", reason: expect.stringMatching(/^SVG must not contain scripts/) }),
+        expect.objectContaining({ id: "shot-broken", reason: expect.stringMatching(/^Not a readable image/) }),
       ])
     );
     expect(db.prepare("select id from screenshots order by sort_order").all()).toEqual([{ id: "shot-1" }]);
