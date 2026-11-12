@@ -9,6 +9,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { extensions, extensionVersions, screenshots, submissions } from "@/lib/db/schema";
 import { validateManifest } from "@/lib/manifest";
+import { grantOf } from "@/lib/webmail-compat/grants";
 import { getStoredFile, storeBundleFile, storeMedia } from "@/lib/storage";
 import { onlineSigner, releaseStatement } from "@/lib/signing";
 import { refreshLatest } from "@/lib/release-caches";
@@ -97,7 +98,9 @@ export async function publishSubmission(sub: Submission): Promise<void> {
       bundlePath: stored.path,
       bundleSha256: sha256,
       bundleSize: bundle.length,
-      permissions: manifest.permissions,
+      // What a webmail grants, optional permissions included; the listing
+      // reads it from the manifest again when it answers.
+      permissions: grantOf(manifest.raw).permissions,
       minAppVersion: manifest.minAppVersion,
       manifest: manifest.raw,
       scanStatus: (sub.scanReport as { findings?: { severity: string }[] } | null)?.findings?.some((f) => f.severity === "warn") ? "flagged" : "clean",

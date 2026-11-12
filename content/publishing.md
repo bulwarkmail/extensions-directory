@@ -119,6 +119,8 @@ A token can only submit from the repository and folder set on the extension; it 
 
 On the extension's page in the dashboard, submit the tag, branch or commit with **Dry run: build and check only** ticked. The directory builds it and runs the same install checks and code scanner as for a real submission, shows you the result, and queues nothing for review.
 
+The reviewer and the listing see everything a webmail grants the version, not only `permissions`: the optional permissions it knows, the tier, `httpOrigins`, `apiPostPaths`, `frameOrigins` and the servers named under `credentials`. An update that adds to any of them is pointed out to the reviewer. `permissions` and `optionalPermissions` must each be a list of strings.
+
 ## The API
 
 The Action uses these endpoints; you can call them directly.
@@ -134,6 +136,15 @@ The body is JSON. With an OIDC token: `subpath` (for monorepos) and optionally `
 The answer is `202` with the submission's `id`, `url`, `statusUrl` and a `pollToken`. Poll `statusUrl` until `status` is `awaiting_review` (built and checked, waiting for a reviewer), `build_failed`, `blocked`, `dry_run_passed` or `dry_run_failed`.
 
 OIDC tokens must have the directory's address as their audience (`https://extensions.bulwarkmail.org`). Each token works once.
+
+Every version in the listing (`latest`, `newest` and `versions` of `GET /api/v2/extensions/{slug}`, `latest` in `GET /api/v2/extensions`, `GET /api/v2/extensions/{slug}/versions`, and the offers of `POST /api/v2/updates`) says what a webmail grants it:
+
+- `permissions`: the version's permissions together with the optional ones the webmail knows;
+- `tier`: `"untrusted"` or `"privileged"` for a plugin, `null` for a theme;
+- `httpOrigins`, `apiPostPaths`, `frameOrigins`: the lists from the manifest, as the webmail accepts them;
+- `credentialOrigins`: the servers its credentials are sent to, that is each fixed `origin` and the default of a server the admin sets through `originKey`. A server each user enters isn't listed.
+
+The lists are empty when the manifest has none, and all of them are empty for a theme.
 
 ## After publishing
 

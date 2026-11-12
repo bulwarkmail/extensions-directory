@@ -44,6 +44,7 @@ const JS_BLOCK_RULES: Rule[] = [
   { rule: "js-javascript-url", pattern: /(?:href|src|action|formaction)\s*=\s*["']javascript:/i, message: "javascript: URLs are not allowed" },
   { rule: "js-settimeout-string", pattern: /\bsetTimeout\s*\(\s*['"`]/, message: "setTimeout with a string argument is not allowed (acts like eval)" },
   { rule: "js-setinterval-string", pattern: /\bsetInterval\s*\(\s*['"`]/, message: "setInterval with a string argument is not allowed (acts like eval)" },
+  { rule: "js-desktop-bridge", pattern: /\bbulwarkDesktop\b/, message: "Reaches the desktop app's bridge directly; plugins use the api they are given, such as api.keystore" },
   { rule: "js-script-injection", pattern: /createElement\s*\(\s*['"`]script['"`]\s*\)/i, message: "Programmatic <script> creation is not allowed" },
 ];
 

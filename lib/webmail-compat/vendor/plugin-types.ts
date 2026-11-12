@@ -1,9 +1,11 @@
-// Copied from the webmail (bulwarkmail/webmail 7cf733225, lib/plugin-types.ts)
+// Copied from the webmail (bulwarkmail/webmail 5434b6fa2, lib/plugin-types.ts)
 // by scripts/sync-webmail-compat.mjs. Do not edit; sync again instead.
 // @ts-nocheck
 /* eslint-disable */
 import type { CredentialSpec } from './plugin-secrets/credentials';
 import type { CatalogSlotName } from './plugin-slot-catalog';
+import { ASSISTANT_PERMISSIONS, type AssistantHostFeatures } from './plugin-sandbox/assistant/types';
+import type { AttachmentExtrasB, EmailReadViewExtrasB } from './plugin-sandbox/assistant/b.types';
 
 // Plugin & Theme system types
 
@@ -65,6 +67,23 @@ export interface ThemeTypography {
   baseFontSize?: string;
 }
 
+/**
+ * How printouts look under the theme, emitted as the `--print-*` variables
+ * (lib/print/print-theme.ts). Unset keys keep the standard printout.
+ */
+export interface ThemePrintTokens {
+  /** Font stack of the printout's text. */
+  fontFamily?: string;
+  /** Font stack of the subject line. */
+  headingFontFamily?: string;
+  textColor?: string;
+  headingColor?: string;
+  /** The rule under the header. */
+  ruleColor?: string;
+  /** Page margins of a printed message: 1 to 4 lengths in mm, cm, in, pt or px. */
+  pageMargin?: string;
+}
+
 export interface ThemeManifest {
   id: string;
   name: string;
@@ -107,6 +126,8 @@ export interface ThemeManifest {
   radii?: ThemeRadii;
   /** Font stacks + base size, emitted as `--font-*` vars. */
   typography?: ThemeTypography;
+  /** Fonts, colours and margins of printouts, emitted as `--print-*` vars. */
+  print?: ThemePrintTokens;
 }
 
 export interface PluginManifest {
@@ -256,6 +277,18 @@ export interface InstalledPlugin {
   managed?: boolean;
   // True when plugin is admin-enforced and cannot be disabled locally.
   forceEnabled?: boolean;
+  /**
+   * For an admin's plugin: what users get while they haven't chosen.
+   * False when the admin picked "Off until users turn it on".
+   */
+  defaultOn?: boolean;
+  /**
+   * The user turned it on or off themselves (or it was turned off because it
+   * kept failing), so the admin's default no longer changes it.
+   */
+  chosen?: boolean;
+  /** Turned on by the admin's default, not by the user. */
+  autoEnabled?: boolean;
   // True when plugin has been approved by an admin. Unapproved plugins cannot be enabled.
   adminApproved?: boolean;
   settingsSchema?: Record<string, SettingFieldSchema>;
@@ -285,6 +318,8 @@ export interface InstalledPlugin {
    * skip the consent prompt (admin pre-approval).
    */
   grantedPermissions?: string[];
+  /** Asked for a plugin an admin installed (ALWAYS_ASK_USER), and the user said no: not asked again. */
+  declinedPermissions?: string[];
   /**
    * For plugins the user installed: the validated manifest, kept so the
    * package can be rebuilt for an approval request, and the hash an admin
@@ -399,7 +434,7 @@ export interface KeyboardShortcut {
 // ─── Read-Only View Types ────────────────────────────────────
 // Projected views exposed to plugins - no direct store references
 
-export interface EmailReadView {
+export interface EmailReadView extends EmailReadViewExtrasB {
   id: string;
   /**
    * The JMAP account the message is in. Message ids repeat across accounts
@@ -422,9 +457,10 @@ export interface EmailReadView {
   /**
    * The message's attachments. `blobId` is what `email.getAttachment`
    * takes. Inline images are included and marked. Empty until the host has
-   * loaded the message's body structure.
+   * loaded the message's body structure. An image the HTML shows inline
+   * also has its `cid` and, when the sender wrote one, its `alt` text.
    */
-  attachments: { blobId: string; name: string; type: string; size: number; inline: boolean }[];
+  attachments: ({ blobId: string; name: string; type: string; size: number; inline: boolean } & AttachmentExtrasB)[];
   preview: string;
   keywords: string[];
   /** Full plain-text body of the message (HTML-only bodies are stripped to
@@ -614,6 +650,13 @@ export interface TaskInput {
    * update as `alerts` is.
    */
   relatedTo?: Record<string, TaskRelationInput | null> | null;
+  /**
+   * Keywords (1-64 of `A-Z a-z 0-9 . _ -`): `true` sets one, null removes
+   * it. A task holds at most 10, counting every keyword on it, those
+   * another app wrote too. Merged by key on update as `alerts` is; keywords
+   * another app wrote stay unless named with null.
+   */
+  keywords?: Record<string, true | null> | null;
 }
 
 /**
@@ -968,7 +1011,7 @@ export interface AppInfoView {
  * that does the same job steps back while one is true. Missing on hosts
  * older than 1.19.0, so read it as `api.host?.features?.x === true`.
  */
-export interface HostFeaturesView {
+export interface HostFeaturesView extends AssistantHostFeatures {
   /** The admin turned on the "External" label on mail from outside the organisation (organisation.externalMail.senderLabel). */
   externalSenderLabel: boolean;
   /** The admin turned on the confirm before sending outside the organisation (organisation.externalMail.recipientWarning). */
@@ -981,6 +1024,18 @@ export interface HostFeaturesView {
    * down.
    */
   noThirdPartyTraffic: boolean;
+  /**
+   * The desktop app's OS certificate store and smart cards are there for this
+   * plugin: privileged tier, the `keystore` permission, and a shell that has them.
+   * Absent otherwise. See `api.keystore`.
+   */
+  keystore?: boolean;
+  /**
+   * onRenderEmailBody may return `blockExternalContent: true` to keep external content
+   * off for that body, whatever the settings and trusted senders allow. Per plugin, for
+   * those with `email:render-takeover`. Absent on webmails that ignore the field.
+   */
+  blockExternalContent?: boolean;
 }
 
 /** One setting `api.app.searchSettings` found, in the user's language. */
@@ -1035,7 +1090,7 @@ export interface ComposeOptions {
 export interface EmailListBadge {
   /** Stable unique key within the plugin - used as React key */
   key: string;
-  /** Short label text displayed in the badge */
+  /** Short label text displayed in the badge; empty for an icon-only badge (needs `icon`, read out by `title`) */
   label: string;
   /** CSS color value for the badge background, e.g. "#e74c3c" or "var(--color-warning)" */
   color?: string;
@@ -1163,6 +1218,20 @@ export interface SieveScriptGenerateContext {
 }
 
 /**
+ * Passed to onComposeFromLink (Bulwark 1.21 and later): the composer opened
+ * from a link with parameters for this plugin, such as
+ * `mailto:a@b.de?subject=Mahnung&x-akte-case=01%2F2026` for the plugin
+ * `akte`. Only the plugin named in the parameters hears it. The link can
+ * come from anyone: treat the values as untrusted input.
+ */
+export interface ComposeLinkContext {
+  /** The composer, for api.composer.* (compose:read / compose:write). */
+  composerId: string;
+  /** This plugin's parameters, the `x-<plugin id>-` prefix gone; names in lower case. */
+  params: Record<string, string>;
+}
+
+/**
  * Passed to onMailtoIntercept handlers.
  * Return false to prevent the browser from opening the system mail client.
  */
@@ -1247,6 +1316,25 @@ export interface OutgoingEmail {
    * recipient warning is off. Empty when every recipient is internal.
    */
   externalRecipients?: string[];
+  /**
+   * Bulwark 1.21 and later: the id of the composer the message is sent from,
+   * the same id its actions and slots hand out (api.composer.*), so a plugin
+   * knows which of its drafts goes out. Set in the composer (docked, full,
+   * pop-out window, Pro tab, quick compose; also for a scheduled send or one
+   * with Undo) and in a quick reply (onBeforeEmailSend only); absent for a
+   * plugin's forward. A plugin can't change it.
+   */
+  composerId?: string;
+  /**
+   * Bulwark 1.21 and later, onTransformOutgoingEmail: keywords to set on the
+   * message, so its copy in Sent carries them from the start. Only from a
+   * plugin with `email:write`; others' changes to the list are dropped.
+   * Custom keywords in RFC 8621 syntax (printable ASCII without spaces and
+   * the characters ( ) { ] % * " and backslash), plus `$flagged` and
+   * Bulwark's tags (`$label:<id>`); other `$` keywords are the system's and
+   * are dropped, as are invalid ones. At most 10. Starts as an empty list.
+   */
+  keywords?: string[];
 }
 /**
  * Passed to onBeforeDraftAutoSave handlers as a transform value.
@@ -1460,6 +1548,16 @@ export interface ExternalSearchResult {
   source?: string;
   /** The message the entry stands for, opened in the reader on a click. */
   email?: SearchResultEmail;
+  /**
+   * The next three are shown only when the user chose one line per entry,
+   * in place of the snippet; the snippet may say the same for the two-line
+   * entry. Who the entry is from, e.g. a message's sender; plain text.
+   */
+  from?: string;
+  /** When, as an ISO 8601 date-time; shown as the message list shows its dates. */
+  date?: string;
+  /** How well the entry matches, from 0 to 1; shown as five bars. */
+  score?: number;
 }
 
 /** A message named by a search result. */
@@ -1547,6 +1645,10 @@ export const ALL_PERMISSIONS = [
   // message bodies and private keys; only granted to a signed, admin-approved
   // privileged bundle after explicit high-risk consent.
   'crypto:full',
+  // Sign and decrypt with the OS certificate store and smart cards, in the desktop
+  // app. Declare it in optionalPermissions: as a plain permission it would be an
+  // install error on a webmail that doesn't know it. Privileged tier only.
+  'keystore',
   // Submit a fully-formed raw RFC822 message via JMAP (used after a plugin
   // signs/encrypts an outgoing message itself).
   'email:raw-send',
@@ -1564,7 +1666,7 @@ export const ALL_PERMISSIONS = [
   // Read the message being written (api.composer.getBody/getSelection/getSnapshot), in
   // a composer that handed the plugin its id.
   'compose:read',
-  // Change the message being written (api.composer.replaceSelection/replaceBody).
+  // Change the message being written (api.composer.replaceSelection/replaceBody/setSubject).
   'compose:write',
   // Check the text of every open composer while the user types
   // (api.composer.registerChecker): the host sends the plugin what the user
@@ -1588,6 +1690,12 @@ export const ALL_PERMISSIONS = [
   'security:read',
   'auth:observe',
   'auth:emit',
+  // End an impersonation handoff and sign back in to the account that
+  // started it (api.user.returnToOwnAccount, the app-top-banner slot's
+  // `canReturn`). A plugin with it and an app-top-banner banner draws the
+  // button, and the core strip steps back. Declare it in
+  // optionalPermissions: older webmails don't know it.
+  'auth:impersonation-return',
   'account:read',
   // Look people up in the server's directory (api.user.findPeople).
   'directory:read',
@@ -1596,8 +1704,11 @@ export const ALL_PERMISSIONS = [
   'ui:email-details',
   'ui:download-file',
   // Show a system notification, or a toast when the user hasn't allowed them
-  // (api.notifications.show).
+  // (api.notifications.show), and see the app's own toasts (onToastShow).
   'ui:notifications',
+  // See every web link the user opens, with its text, and stop it or open
+  // another address instead (onBeforeExternalLink).
+  'links:check',
   // Register native message-list category tabs (Gmail-style inbox tabs).
   'ui:message-list-tabs',
   'ui:composer-toolbar', 'ui:composer-sidebar',
@@ -1610,6 +1721,8 @@ export const ALL_PERMISSIONS = [
   'http:proxy',
   'admin:config',
   'app:lifecycle',
+  // The AI assistant's host APIs, one list per area (lib/plugin-sandbox/assistant).
+  ...ASSISTANT_PERMISSIONS,
 ] as const;
 
 export type Permission = (typeof ALL_PERMISSIONS)[number];
@@ -1651,6 +1764,11 @@ export const DISALLOWED_CSS_PATTERNS = [
   /url\s*\(\s*(?!['"]?\s*#)/i,
   // Takes plain strings, so it loads remote images without any url().
   /image-set\s*\(/i,
+  // image("…") and src("…") take the address as a plain string too (CSS
+  // Images 4, Values 4). cross-fade() and element() name no address of their
+  // own; what they wrap goes through these same patterns.
+  /\bimage\s*\(/i,
+  /\bsrc\s*\(/i,
   /expression\s*\(/i,
   /javascript\s*:/i,
   /-moz-binding/i,

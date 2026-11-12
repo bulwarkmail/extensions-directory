@@ -6,6 +6,7 @@ import { noteFlags } from "@/lib/changelog";
 import { siteUrl } from "@/lib/publishing/view";
 import { compare } from "@/lib/semver";
 import { source } from "@/lib/sources";
+import { grantOf } from "@/lib/webmail-compat/grants";
 
 type Ext = typeof extensions.$inferSelect;
 type Author = typeof authors.$inferSelect;
@@ -18,13 +19,23 @@ export function authorView(a: Author | null) {
 }
 
 export function versionBrief(v: Version, slug: string) {
+  // Read from the manifest when the answer is built, so versions published
+  // before optional permissions were counted are listed in full too.
+  const grant = grantOf(v.manifest);
   return {
     version: v.version,
     channel: v.channel,
     publishedAt: v.publishedAt,
     minAppVersion: v.minAppVersion,
     maxAppVersion: v.maxAppVersion,
-    permissions: v.permissions ?? [],
+    // Optional permissions included: what the webmail's install dialog has to show.
+    permissions: grant.permissions,
+    // "untrusted" or "privileged" for a plugin, null for a theme.
+    tier: grant.tier,
+    httpOrigins: grant.httpOrigins,
+    apiPostPaths: grant.apiPostPaths,
+    frameOrigins: grant.frameOrigins,
+    credentialOrigins: grant.credentialOrigins,
     size: v.bundleSize,
     sha256: v.bundleSha256,
     yanked: v.yankedAt ? { at: v.yankedAt, reason: v.yankReason } : null,

@@ -1,6 +1,7 @@
 // Reads the parts of manifest.json the directory itself needs (slug, type,
 // version, media paths). Whether a webmail would install the bundle is
-// decided by lib/webmail-compat, which runs the webmail's own checks.
+// decided by lib/webmail-compat, which runs the webmail's own checks, and
+// what it grants is read there too (grantOf), never here.
 
 export interface NormalizedManifest {
   raw: Record<string, unknown>;
@@ -10,7 +11,6 @@ export interface NormalizedManifest {
   description: string;
   type: "plugin" | "theme";
   pluginType: "hook" | "ui-extension" | "sidebar-app" | null;
-  permissions: string[];
   entrypoint: string;
   minAppVersion: string | null;
   author: string;
@@ -62,9 +62,15 @@ export function validateManifest(raw: unknown):
     typeof m.entrypoint === "string" ? m.entrypoint.trim() : "";
   const minAppVersion =
     typeof m.minAppVersion === "string" ? m.minAppVersion.trim() : null;
-  const permissions = Array.isArray(m.permissions)
-    ? m.permissions.filter((p): p is string => typeof p === "string")
-    : [];
+
+  // A webmail grants both lists and refuses a package where either is
+  // anything but a list of strings, so they are refused at submission.
+  for (const key of ["permissions", "optionalPermissions"] as const) {
+    const list = m[key];
+    if (list !== undefined && (!Array.isArray(list) || list.some((p) => typeof p !== "string"))) {
+      return { ok: false, error: `'${key}' must be a list of strings` };
+    }
+  }
 
   if (!name) return { ok: false, error: "Manifest is missing 'name'" };
   if (!version) return { ok: false, error: "Manifest is missing 'version'" };
@@ -143,7 +149,6 @@ export function validateManifest(raw: unknown):
       description,
       type: normalizedType,
       pluginType,
-      permissions,
       entrypoint:
         entrypoint || (normalizedType === "theme" ? "theme.css" : "index.js"),
       minAppVersion,

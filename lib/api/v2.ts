@@ -32,7 +32,7 @@ import { readZipFiles } from "@/lib/pipeline/diff";
 import { getStoredFile } from "@/lib/storage";
 import { validWebhookUrl, WEBHOOK_EVENTS } from "@/lib/webhooks";
 import { hit, LIMITS } from "@/lib/ratelimit";
-import { KNOWN_PERMISSIONS, permissionText, HIGH_RISK_PERMISSIONS } from "@/lib/webmail-compat";
+import { KNOWN_PERMISSIONS, permissionText, HIGH_RISK_PERMISSIONS, grantOf } from "@/lib/webmail-compat";
 import type { Ctx, Route } from "./router";
 import crypto from "crypto";
 
@@ -105,7 +105,8 @@ const publicRoutes: Route[] = [
         screenshots: media.screenshots.map((s) => ({ url: fileUrl(s.path), altText: s.altText })),
         themePreviews: media.themePreviews.map((p) => ({ variant: p.variant, url: fileUrl(p.previewPath), colors: p.colors })),
         advisories: advisoriesFor(e.id).map((x) => advisoryView(x, e.slug)),
-        permissions: (latest?.permissions ?? e.permissions ?? []).map((p) => ({ id: p, ...(permissionText(p) ?? { title: p, body: "" }), highRisk: HIGH_RISK_PERMISSIONS.has(p) })),
+        // What the listed version is granted, optional permissions included.
+        permissions: (latest ? grantOf(latest.manifest).permissions : e.permissions ?? []).map((p) => ({ id: p, ...(permissionText(p) ?? { title: p, body: "" }), highRisk: HIGH_RISK_PERMISSIONS.has(p) })),
       });
     },
   },

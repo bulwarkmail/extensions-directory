@@ -1,8 +1,11 @@
 // What changed against the previous published version, for the reviewer:
-// files added, removed and changed, and the manifest fields that widen what
-// a plugin may do (permissions, origins, tier).
+// files added, removed and changed, and what a webmail newly grants
+// (lib/webmail-compat/grants.ts): permissions with the optional ones, the
+// three origin lists, the servers credentials are sent to, and the tier. A
+// first version is compared with nothing, so all it is granted is new.
 import crypto from "crypto";
 import JSZip from "jszip";
+import { credentialTarget, grantOf } from "@/lib/webmail-compat/grants";
 
 export interface DiffSummary {
   previousVersion: string | null;
@@ -10,16 +13,22 @@ export interface DiffSummary {
   removed: string[];
   changed: string[];
   unchanged: number;
+  /** Granted now and not before, optional permissions included. */
   permissionsAdded: string[];
   permissionsRemoved: string[];
+  /** Of the new permissions, those asked for under optionalPermissions only. */
+  optionalPermissionsAdded: string[];
+  /** This version newly asks for the certificates on people's computers: look at it twice. */
+  keystoreAdded: boolean;
+  /** New entries of httpOrigins, frameOrigins and apiPostPaths, and new servers credentials go to ("credentials"). */
   originsAdded: Record<string, string[]>;
+  /** A changed tier; on a first version, { from: null, to: "privileged" } for a privileged plugin. */
   tierChanged: { from: string | null; to: string | null } | null;
 }
 
 const ORIGIN_FIELDS = ["httpOrigins", "frameOrigins", "apiPostPaths"] as const;
 
 const sha = (d: Uint8Array) => crypto.createHash("sha256").update(d).digest("hex");
-const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
 export async function readZipFiles(zipBytes: Uint8Array): Promise<Map<string, Uint8Array>> {
   const zip = await JSZip.loadAsync(zipBytes);
@@ -44,17 +53,22 @@ export function diffBundles(
     else unchanged++;
   }
   const removed = [...prevFiles.keys()].filter((k) => !next.files.has(k));
-  const pm = previous?.manifest ?? {};
-  const prevPerms = new Set(list(pm.permissions));
-  const nextPerms = new Set(list(next.manifest.permissions));
+  const before = previous ? grantOf(previous.manifest) : null;
+  const after = grantOf(next.manifest);
+  const prevPerms = new Set(before?.permissions ?? []);
+  const nextPerms = new Set(after.permissions);
   const originsAdded: Record<string, string[]> = {};
   for (const f of ORIGIN_FIELDS) {
-    const before = new Set(list(pm[f]));
-    const fresh = list(next.manifest[f]).filter((o) => !before.has(o));
+    const old = new Set(before?.[f] ?? []);
+    const fresh = after[f].filter((o) => !old.has(o));
     if (fresh.length) originsAdded[f] = fresh;
   }
-  const tierFrom = typeof pm.tier === "string" ? pm.tier : null;
-  const tierTo = typeof next.manifest.tier === "string" ? next.manifest.tier : null;
+  const oldTargets = new Set((before?.credentials ?? []).map(credentialTarget));
+  const freshTargets = [...new Set(after.credentials.map(credentialTarget))].filter((t) => !oldTargets.has(t));
+  if (freshTargets.length) originsAdded.credentials = freshTargets;
+  const tierChanged = before
+    ? before.tier !== after.tier ? { from: before.tier, to: after.tier } : null
+    : after.tier === "privileged" ? { from: null, to: "privileged" } : null;
   return {
     previousVersion: previous?.version ?? null,
     added: added.sort(),
@@ -63,7 +77,9 @@ export function diffBundles(
     unchanged,
     permissionsAdded: [...nextPerms].filter((p) => !prevPerms.has(p)).sort(),
     permissionsRemoved: [...prevPerms].filter((p) => !nextPerms.has(p)).sort(),
+    optionalPermissionsAdded: after.optionalPermissions.filter((p) => !prevPerms.has(p)).sort(),
+    keystoreAdded: nextPerms.has("keystore") && !prevPerms.has("keystore"),
     originsAdded,
-    tierChanged: previous && tierFrom !== tierTo ? { from: tierFrom, to: tierTo } : null,
+    tierChanged,
   };
 }

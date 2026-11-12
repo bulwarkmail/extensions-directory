@@ -1,7 +1,9 @@
-// Copied from the webmail (bulwarkmail/webmail 7cf733225, lib/theme-color-meta.ts)
+// Copied from the webmail (bulwarkmail/webmail 5434b6fa2, lib/theme-color-meta.ts)
 // by scripts/sync-webmail-compat.mjs. Do not edit; sync again instead.
 // @ts-nocheck
 /* eslint-disable */
+import { getDesktopBridge } from './desktop/bridge';
+
 /**
  * Keeps <meta name="theme-color"> in step with the active theme.
  *
@@ -70,6 +72,7 @@ export function syncThemeColorMeta(): void {
   const run = () => {
     scheduled = false;
     writeMeta();
+    tellDesktopShell();
   };
 
   if (typeof requestAnimationFrame === 'function') {
@@ -77,6 +80,15 @@ export function syncThemeColorMeta(): void {
   } else {
     setTimeout(run, 0);
   }
+}
+
+/** The desktop app's title bar buttons and new windows' first frame follow the page. */
+function tellDesktopShell(): void {
+  const theme = getDesktopBridge()?.theme;
+  if (!theme) return;
+  const background = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content;
+  if (!background) return;
+  theme.set({ dark: document.documentElement.classList.contains('dark'), background });
 }
 
 /** Turn syncing on and take a first reading. Called by <ThemeColorSync />. */

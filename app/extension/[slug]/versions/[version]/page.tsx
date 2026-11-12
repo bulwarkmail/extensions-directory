@@ -6,7 +6,8 @@ import { advisoriesFor, extensionBySlug, releasesOf } from "@/lib/catalog";
 import { versionFull } from "@/lib/api/views";
 import { renderMarkdown } from "@/lib/markdown";
 import { formatBytes, formatDate } from "@/lib/utils";
-import { PermissionList } from "@/components/permission-badge";
+import { GrantList } from "@/components/permission-badge";
+import { grantOf } from "@/lib/webmail-compat";
 import { Status } from "@/components/status";
 import { ICON } from "@/components/icon";
 import { InstallButton, InstallHelp } from "@/components/install-button";
@@ -80,7 +81,7 @@ export default async function VersionPage({ params }: Props) {
         <aside className="dx-stack">
           <section className="dx-version-sec">
             <h2 className="dx-h2">Permissions</h2>
-            <PermissionList permissions={v.permissions ?? []} isTheme={row.e.type === "theme"} />
+            <GrantList grant={grantOf(v.manifest)} isTheme={row.e.type === "theme"} />
           </section>
         </aside>
       </div>
