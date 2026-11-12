@@ -1,0 +1,28 @@
+# The image is built from this folder, and `next build` traces the whole
+# project into the standalone server, so anything left in the build context
+# can end up in the image. Leave out secrets, local data, installed packages
+# and build or test output; the build installs and builds its own.
+.git
+.env
+.env.*
+!.env.example
+keys/
+*.pem
+data/
+*.db
+*.db-shm
+*.db-wal
+node_modules
+.next
+out
+build
+deploy/dist
+packages/cli/dist
+coverage
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
