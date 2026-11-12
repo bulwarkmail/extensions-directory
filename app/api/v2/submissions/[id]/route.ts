@@ -43,17 +43,30 @@ async function authorize(request: Request, id: string, write: boolean) {
   throw notFound;
 }
 
+/**
+ * authorize(), and a refused request counts against the caller's address
+ * (one shared counter when there is none), never against the submission.
+ */
+async function authorizeOrCount(request: Request, id: string, write: boolean) {
+  try {
+    return await authorize(request, id, write);
+  } catch (err) {
+    hit([LIMITS.unauthorizedPollPerIp(hashIp(clientIp(request)) ?? "unknown")]);
+    throw err;
+  }
+}
+
 export const GET = handle(async (request: Request, { params }: Params) => {
   const { id } = await params;
-  hit([LIMITS.pollPerSubmission(id)]);
-  const { sub, full } = await authorize(request, id, false);
+  const { sub, full } = await authorizeOrCount(request, id, false);
+  hit([LIMITS.pollPerSubmission(sub.id)]);
   return ok(submissionView(sub, { full }));
 });
 
 // Withdraw a submission that hasn't been decided yet.
 export const DELETE = handle(async (request: Request, { params }: Params) => {
   const { id } = await params;
-  const { actor } = await authorize(request, id, true);
+  const { actor } = await authorizeOrCount(request, id, true);
   await withdrawSubmission(id, actor, request);
   const sub = db.select().from(submissions).where(eq(submissions.id, id)).get()!;
   return ok(submissionView(sub));
