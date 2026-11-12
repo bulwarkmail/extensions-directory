@@ -107,6 +107,8 @@ jobs:
           work="$RUNNER_TEMP/smoke"
           mkdir -p "$work/uploads" && tar -xzf release.tgz -C "$work"
           export DATABASE_PATH="$RUNNER_TEMP/smoke.db" UPLOADS_DIR="$work/uploads" PORT=3100 HOSTNAME=127.0.0.1 NODE_ENV=production
+          # Production refuses to start without these; the check runs on throwaway values.
+          export AUTHOR_SESSION_SECRET="$(openssl rand -hex 32)" TOKEN_PEPPER="$(openssl rand -hex 32)" IP_HASH_SALT="$(openssl rand -hex 32)"
           (cd "$work" && node deploy/migrate.cjs)
           # The worker loads its native modules from the release and keeps running.
           (cd "$work" && SANDBOX_RUNNER=off STAGING_DIR="$RUNNER_TEMP/staging" timeout 8 node deploy/dist/worker.cjs > "$RUNNER_TEMP/worker.log" 2>&1) || [ $? -eq 124 ] || { cat "$RUNNER_TEMP/worker.log"; exit 1; }
