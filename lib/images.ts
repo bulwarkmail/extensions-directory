@@ -15,7 +15,7 @@
 //
 // Kept free of Next and database imports so the media conversion script
 // (scripts/reencode-media.ts) can bundle it.
-import { fork } from "child_process";
+import { fork, spawn, type ChildProcess, type StdioOptions } from "child_process";
 import crypto from "crypto";
 import sharp, { type Metadata, type OutputInfo } from "sharp";
 import { checkedSvg } from "./svg";
@@ -49,6 +49,8 @@ export const MAX_INPUT_BYTES: Record<ImageKind, number> = {
 
 const MAX_PIXELS = 25_000_000;
 const MAX_SVG_SIDE = 4096;
+/** Canvas of an SVG that runs filters: each filter step draws on a canvas of its own. */
+export const MAX_FILTERED_SVG_PIXELS = 2048 * 2048;
 
 type Format = "png" | "jpeg" | "webp" | "gif" | "svg";
 
@@ -110,7 +112,18 @@ function svgText(bytes: Buffer): string | null {
   return text;
 }
 
+/**
+ * Address space of the decoder child on Linux, where the worker runs. Node
+ * and sharp reserve about 1.2 GB of it before decoding anything (measured
+ * with the thread pools below; honest images peaked at 1.24 GB), so this
+ * leaves the decoding about half a gigabyte. A child that reaches it fails
+ * its allocations and stops, and the image is refused. Elsewhere
+ * (development on Windows or macOS) only the limits of the checked SVG apply.
+ */
+export const CHILD_ADDRESS_SPACE_MB = 1792;
+
 let childScript: string | null = null;
+let childAddressSpaceMb = CHILD_ADDRESS_SPACE_MB;
 
 /**
  * Makes encodeImage decode each image in a new child process started from
@@ -118,19 +131,40 @@ let childScript: string | null = null;
  * only the variables in CHILD_ENV, none of the worker's secrets. The checks
  * before decoding stay in this process, so only accepted bytes reach it.
  */
-export function decodeInChildProcess(script: string | null): void {
+export function decodeInChildProcess(script: string | null, options: { addressSpaceMb?: number } = {}): void {
   childScript = script;
+  childAddressSpaceMb = options.addressSpaceMb ?? CHILD_ADDRESS_SPACE_MB;
 }
 
 const CHILD_ENV = ["PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP", "SystemRoot", "NODE_ENV"];
+// Few threads, so the address space the child reserves doesn't grow with the
+// host's CPU count: glibc keeps one malloc arena per thread, and every
+// thread reserves a stack. worker/decode-image.ts sets sharp's to one.
+const CHILD_TUNING = { MALLOC_ARENA_MAX: "2", UV_THREADPOOL_SIZE: "2" };
+const CHILD_NODE_OPTIONS = ["--v8-pool-size=2"];
 const CHILD_TIMEOUT_MS = 60_000;
 
 export type ChildReply = { image: EncodedImage } | { error: string; imageError: boolean };
 
+function startChild(script: string): ChildProcess {
+  const env: Record<string, string | undefined> = {
+    ...Object.fromEntries(CHILD_ENV.filter((key) => process.env[key] !== undefined).map((key) => [key, process.env[key]])),
+    ...CHILD_TUNING,
+  };
+  const options = { env: env as NodeJS.ProcessEnv, serialization: "advanced" as const, stdio: ["ignore", "inherit", "inherit", "ipc"] as StdioOptions };
+  if (process.platform !== "linux") return fork(script, [], { ...options, execArgv: CHILD_NODE_OPTIONS });
+  // The shell sets the limit and then becomes node (same process); the IPC
+  // channel stays open across exec.
+  return spawn(
+    "/bin/sh",
+    ["-c", 'ulimit -v "$1" || exit 97; shift; exec "$@"', "decode-image", String(childAddressSpaceMb * 1024), process.execPath, ...CHILD_NODE_OPTIONS, script],
+    options,
+  );
+}
+
 function encodeInChild(script: string, bytes: Buffer, kind: ImageKind): Promise<EncodedImage> {
-  const env = Object.fromEntries(CHILD_ENV.filter((key) => process.env[key] !== undefined).map((key) => [key, process.env[key]])) as NodeJS.ProcessEnv;
   return new Promise((resolve, reject) => {
-    const child = fork(script, [], { env, execArgv: [], serialization: "advanced", stdio: ["ignore", "inherit", "inherit", "ipc"] });
+    const child = startChild(script);
     let settled = false;
     const settle = (fn: () => void) => {
       if (settled) return;
@@ -179,6 +213,7 @@ export async function encodeImage(input: Buffer, kind: ImageKind): Promise<Encod
   }
   let format: Format | null = rasterFormat(input);
   let bytes = input;
+  let filtered = false;
   if (!format) {
     const text = svgText(input);
     if (text === null) {
@@ -188,6 +223,7 @@ export async function encodeImage(input: Buffer, kind: ImageKind): Promise<Encod
     const checked = checkedSvg(text);
     if (!checked.ok) throw new ImageError(checked.reason);
     format = "svg";
+    filtered = checked.filtered;
     bytes = Buffer.from(checked.svg, "utf8");
   }
   if (childScript) return encodeInChild(childScript, bytes, kind);
@@ -202,6 +238,10 @@ export async function encodeImage(input: Buffer, kind: ImageKind): Promise<Encod
   if (meta.format !== format) throw new ImageError("Not a readable image");
   if (format === "svg" && ((meta.width ?? 0) > MAX_SVG_SIDE || (meta.height ?? 0) > MAX_SVG_SIDE)) {
     throw new ImageError(`SVG is larger than ${MAX_SVG_SIDE} px on a side`);
+  }
+  // The size librsvg reports here is the canvas it will draw on, before any drawing.
+  if (filtered && (meta.width ?? 0) * (meta.height ?? 0) > MAX_FILTERED_SVG_PIXELS) {
+    throw new ImageError("An SVG with filters may cover at most 2048 x 2048 px");
   }
   if ((meta.width ?? 0) * (meta.height ?? 0) > MAX_PIXELS) throw new ImageError("Image has too many pixels");
 

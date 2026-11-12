@@ -12,11 +12,16 @@
 // escape, comment, at-rule or block in an attribute or style declaration.
 // Attributes and style properties not on the list are left out.
 //
+// The tree is also held to limits on what drawing it costs: the number of
+// elements, of filter primitives per filter, of shapes drawn once use,
+// clip-path and mask references are followed, and of filter primitives run.
+//
 // What librsvg gets is the checked tree written out again (`svg` of the
 // result), never the author's text.
 import { Parser } from "htmlparser2";
 
-export type CheckedSvg = { ok: true; svg: string } | { ok: false; reason: string };
+/** `filtered`: the drawing runs a filter, which needs a few canvases' worth of memory. */
+export type CheckedSvg = { ok: true; svg: string; filtered: boolean } | { ok: false; reason: string };
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const XLINK_NS = "http://www.w3.org/1999/xlink";
@@ -69,6 +74,14 @@ const NOT_XML_CHARACTER = new RegExp(
 );
 const PREDEFINED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 const MAX_DEPTH = 64;
+// The official images have at most 25 elements, 3 primitives per filter and
+// one filtered shape; these leave room for any honest drawing.
+export const MAX_ELEMENTS = 2000;
+export const MAX_FILTER_PRIMITIVES = 8;
+/** Shapes drawn, counting each use, clip-path and mask reference as a copy of what it names. */
+export const MAX_DRAWN = 10_000;
+/** Filter primitives run, counting each filtered shape once per primitive of its filter. */
+export const MAX_FILTER_RUNS = 64;
 
 const MALFORMED = "SVG is not well-formed XML";
 
@@ -341,6 +354,85 @@ function parse(text: string): SvgNode {
   return root;
 }
 
+const URL_ID = /url\(\s*['"]?#([^'")\s]+)/;
+
+function filterPrimitives(filter: SvgNode): number {
+  return filter.children.filter((child) => typeof child !== "string" && child.name.startsWith("fe")).length;
+}
+
+/** The ids an element points at: as a copy to draw (use, clip-path, mask) or as a filter to run. */
+function references(node: SvgNode): ["copy" | "filter", string][] {
+  const out: ["copy" | "filter", string][] = [];
+  const add = (property: string, value: string) => {
+    if (property !== "clip-path" && property !== "mask" && property !== "filter") return;
+    const id = URL_ID.exec(value)?.[1];
+    if (id) out.push([property === "filter" ? "filter" : "copy", id]);
+  };
+  for (const [name, value] of node.attributes) {
+    if (name === "href") {
+      if (node.name === "use") out.push(["copy", value.slice(1)]);
+    } else if (name === "style") {
+      for (const declaration of value.split(";")) {
+        const colon = declaration.indexOf(":");
+        add(declaration.slice(0, colon), declaration.slice(colon + 1));
+      }
+    } else {
+      add(name, value);
+    }
+  }
+  return out;
+}
+
+/** Refuses a drawing past the limits. Returns whether it runs a filter. */
+function measure(root: SvgNode): boolean {
+  const byId = new Map<string, SvgNode>();
+  let elements = 0;
+  const index = (node: SvgNode) => {
+    if (++elements > MAX_ELEMENTS) throw new Refusal(`SVG has more than ${MAX_ELEMENTS} elements`);
+    const id = node.attributes.find(([name]) => name === "id")?.[1];
+    if (id !== undefined && !byId.has(id)) byId.set(id, node);
+    if (node.name === "filter" && filterPrimitives(node) > MAX_FILTER_PRIMITIVES) {
+      throw new Refusal(`SVG filter has more than ${MAX_FILTER_PRIMITIVES} steps`);
+    }
+    for (const child of node.children) if (typeof child !== "string") index(child);
+  };
+  index(root);
+
+  // What an element costs: its subtree, plus a copy of every element it
+  // points at. Counted once per element, and refused as soon as a part is
+  // over a limit, so the count stays small however the references fan out.
+  const known = new Map<SvgNode, { drawn: number; filterRuns: number }>();
+  const open = new Set<SvgNode>();
+  const cost = (node: SvgNode): { drawn: number; filterRuns: number } => {
+    const done = known.get(node);
+    if (done) return done;
+    if (open.has(node)) throw new Refusal("SVG references form a loop");
+    open.add(node);
+    let drawn = 1;
+    let filterRuns = 0;
+    const parts = node.children.filter((child): child is SvgNode => typeof child !== "string");
+    for (const [how, id] of references(node)) {
+      const target = byId.get(id);
+      if (!target) continue;
+      if (how === "filter") filterRuns += filterPrimitives(target);
+      else parts.push(target);
+    }
+    for (const part of parts) {
+      const c = cost(part);
+      drawn += c.drawn;
+      filterRuns += c.filterRuns;
+      if (drawn > MAX_DRAWN) throw new Refusal(`SVG draws more than ${MAX_DRAWN} shapes once its references are followed`);
+      if (filterRuns > MAX_FILTER_RUNS) throw new Refusal(`SVG runs more than ${MAX_FILTER_RUNS} filter steps`);
+    }
+    if (filterRuns > MAX_FILTER_RUNS) throw new Refusal(`SVG runs more than ${MAX_FILTER_RUNS} filter steps`);
+    open.delete(node);
+    const result = { drawn, filterRuns };
+    known.set(node, result);
+    return result;
+  };
+  return cost(root).filterRuns > 0;
+}
+
 function escapeAttribute(value: string): string {
   return value.replace(/[&<"\t\n\r]/g, (c) => ({ "&": "&amp;", "<": "&lt;", '"': "&quot;", "\t": "&#9;", "\n": "&#10;", "\r": "&#13;" })[c]!);
 }
@@ -363,7 +455,9 @@ function serialize(node: SvgNode, isRoot: boolean): string {
 /** The SVG to draw, or why it can't be drawn. Draw `svg`, not the text that came in. */
 export function checkedSvg(text: string): CheckedSvg {
   try {
-    return { ok: true, svg: serialize(parse(text), true) };
+    const root = parse(text);
+    const filtered = measure(root);
+    return { ok: true, svg: serialize(root, true), filtered };
   } catch (err) {
     if (err instanceof Refusal) return { ok: false, reason: err.message };
     throw err;

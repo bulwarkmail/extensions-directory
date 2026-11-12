@@ -76,7 +76,7 @@ describe("checkedSvg writes out what it checked", () => {
       `<rect inkscape:label="bg" style="fill:url(#g);cursor:pointer;isolation:isolate" width="16" height="12"/>` +
       `<use xlink:href="#r" x="1"/><text xml:space="preserve" xml:lang="en">a &amp; b &lt; c &#x41;<![CDATA[ <d> ]]></text></svg>`;
     const out = checkedSvg(text);
-    expect(out).toEqual({
+    expect(out).toMatchObject({
       ok: true,
       svg:
         `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="12">` +
@@ -97,7 +97,7 @@ describe("checkedSvg writes out what it checked", () => {
   });
 
   it("takes an SVG that declares no namespace, as librsvg does, and writes the namespace", () => {
-    expect(checkedSvg('<svg width="10"><rect width="10"/></svg>')).toEqual({
+    expect(checkedSvg('<svg width="10"><rect width="10"/></svg>')).toMatchObject({
       ok: true,
       svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10"><rect width="10"/></svg>',
     });
@@ -105,7 +105,7 @@ describe("checkedSvg writes out what it checked", () => {
   });
 
   it("keeps a prefixed SVG root and writes it without the prefix", () => {
-    expect(checkedSvg('<s:svg xmlns:s="http://www.w3.org/2000/svg"><s:rect width="1"/></s:svg>')).toEqual({
+    expect(checkedSvg('<s:svg xmlns:s="http://www.w3.org/2000/svg"><s:rect width="1"/></s:svg>')).toMatchObject({
       ok: true,
       svg: '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1"/></svg>',
     });
