@@ -99,7 +99,9 @@ function svgText(bytes: Buffer): string | null {
     return null;
   }
   text = text.replace(/^[\t\n\r ]+/, "");
-  if (!text.startsWith("<") || !/<svg\b/i.test(text.slice(0, 1024))) return null;
+  // Whether it is an SVG is for the parser to say: the root may come after
+  // comments of any length.
+  if (!text.startsWith("<")) return null;
   if (text.includes("\0")) throw new ImageError("SVG must be UTF-8 text");
   for (const [decl] of text.matchAll(/<\?xml\b[^>]*/gi)) {
     const encoding = /\bencoding\s*=\s*["']?([^"'\s?>]*)/i.exec(decl);
