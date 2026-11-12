@@ -1,4 +1,19 @@
 import type { NormalizedManifest } from "./manifest";
+import { HIDDEN_CHARACTER_SOURCE } from "./hidden-characters";
+
+// Hidden characters other than NUL, which has its own finding.
+const HIDDEN_NOT_NUL = new RegExp(`(?!\\0)${HIDDEN_CHARACTER_SOURCE}`, "gu");
+
+/** How many hidden characters a text holds, and where the first one is. */
+function countHidden(text: string): { count: number; first: number } {
+  let count = 0;
+  let first = -1;
+  for (const m of text.matchAll(HIDDEN_NOT_NUL)) {
+    if (first < 0) first = m.index;
+    count++;
+  }
+  return { count, first };
+}
 
 interface ResolvedBundle {
   files: Map<string, Uint8Array>;
@@ -240,6 +255,16 @@ export async function scanBundle(
         message: "Text file with a NUL byte. The review page shows it as \\u0000; check what it is for",
         file: rel,
         line: findLineNumber(text, Buffer.from(data.subarray(0, nul)).toString("utf-8").length),
+      });
+    }
+    const hidden = countHidden(text);
+    if (hidden.count > 0) {
+      findings.push({
+        severity: "warn",
+        rule: "text-hidden-characters",
+        message: `${hidden.count.toLocaleString("en")} invisible characters (zero-width, bidirectional, variation selectors, tags or other format and control characters). The review page shows them as escapes; check what they are for`,
+        file: rel,
+        line: findLineNumber(text, hidden.first),
       });
     }
     if (text.length > REVIEW_PART_CHARS) {

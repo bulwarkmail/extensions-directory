@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api } from "@/components/client/api";
+import { showHidden } from "@/lib/hidden-characters";
 
 /**
  * One answer of GET /api/v2/admin/submissions/:id/file: a part of the file and
@@ -41,11 +42,6 @@ function lineDiff(a: string, b: string): { op: " " | "+" | "-"; line: string }[]
   while (j < y.length) out.push({ op: "+", line: y[j++] });
   return out;
 }
-
-// Control characters (other than tab and line breaks), bidirectional overrides and
-// zero-width characters change how code reads without showing; they are shown as \uXXXX.
-const HIDDEN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
-const shown = (s: string) => s.replace(HIDDEN, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
 
 const count = (x: number) => x.toLocaleString("en");
 
@@ -124,12 +120,12 @@ export function FileBrowser({ submissionId, files }: { submissionId: string; fil
               <label className="bw-check"><input type="checkbox" checked={onlyChanges} onChange={(e) => setOnlyChanges(e.target.checked)} /> Only changed lines (against {open.previousVersion})</label>
               <pre className="bw-code dx-log dx-diff"><code>
                 {diff.filter((d, idx) => !onlyChanges || d.op !== " " || diff.slice(Math.max(0, idx - 2), idx + 3).some((x) => x.op !== " ")).map((d, idx) => (
-                  <span key={idx} className={d.op === "+" ? "dx-add" : d.op === "-" ? "dx-del" : undefined}>{`${d.op} ${shown(d.line)}\n`}</span>
+                  <span key={idx} className={d.op === "+" ? "dx-add" : d.op === "-" ? "dx-del" : undefined}>{`${d.op} ${showHidden(d.line)}\n`}</span>
                 ))}
               </code></pre>
             </>
           ) : (
-            <pre className="bw-code dx-log"><code>{shown(open.text)}</code></pre>
+            <pre className="bw-code dx-log"><code>{showHidden(open.text)}</code></pre>
           )}
         </div>
       ) : null}
